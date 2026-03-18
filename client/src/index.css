@@ -1,0 +1,101 @@
+.markdown-body p { margin: 0 0 10px 0; }
+.markdown-body p:last-child { margin-bottom: 0; }
+
+.markdown-body pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 14px 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 10px 0;
+}
+
+.markdown-body code {
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #6366f1;
+}
+
+.markdown-body pre code {
+  background: none;
+  padding: 0;
+  color: #e2e8f0;
+}
+
+.markdown-body h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 14px 0 6px;
+  color: #1e293b;
+}
+
+.markdown-body strong { font-weight: 700; color: #1e293b; }
+.markdown-body ul, .markdown-body ol { padding-left: 20px; margin: 6px 0; }
+.markdown-body li { margin-bottom: 4px; }
+
+/* ── Visualizer box states ─────────────────────────────── */
+.box {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  border: 2px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  transition: all 0.35s ease;  /* ← this one line IS the animation */
+  position: relative;
+}
+
+.box.hi  { background: #fef9c3; border-color: #fbbf24; color: #92400e; } /* amber  — examining */
+.box.cmp { background: #dbeafe; border-color: #60a5fa; color: #1e40af; } /* blue   — comparing */
+.box.ok  { background: #dcfce7; border-color: #4ade80; color: #166534; } /* green  — sorted/found */
+.box.pvt { background: #fee2e2; border-color: #f87171; color: #991b1b; } /* red    — pivot */
+
+/* pointer label above a box */
+.ptr-label {
+  position: absolute;
+  top: -20px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #6366f1;
+  white-space: nowrap;
+}
+
+/* hashmap entry */
+.map-entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.35s ease;
+}
+.map-entry.new { background: #ede9fe; border-color: #a5b4fc; color: #4f46e5; }
+
+/* stack frame */
+.stack-frame {
+  width: 100px;
+  padding: 8px 14px;
+  border-radius: 7px;
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  transition: all 0.35s ease;
+}
+.stack-frame.hi { background: #fef9c3; border-color: #fbbf24; }
+.stack-frame.ok { background: #dcfce7; border-color: #4ade80; }
