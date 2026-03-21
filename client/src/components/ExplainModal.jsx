@@ -1,176 +1,304 @@
-import { useState } from 'react';
+// client/src/components/ExplainModal.jsx
+import { useState, useEffect } from 'react';
+import styled from 'styled-components';
+import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
+import { apiFetch } from '../lib/api.js';
+
+const Overlay = styled(motion.div)`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  backdrop-filter: blur(6px);
+
+  @media (max-width: 600px) {
+    padding: 0;
+    align-items: flex-end;
+  }
+`;
+
+const Modal = styled(motion.div)`
+  background: ${({ theme }) => theme.colors.bgSurface};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.radius.xl};
+
+  /* FIX: constrain to viewport width so it never causes horizontal scroll */
+  width: min(680px, 95vw);
+  max-height: min(88vh, 720px);
+
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: ${({ theme }) => theme.shadows.lg};
+
+  @media (max-width: 600px) {
+    width: 100vw;
+    max-height: 92vh;
+    border-radius: ${({ theme }) => theme.radius.lg} ${({ theme }) => theme.radius.lg} 0 0;
+    border-bottom: none;
+  }
+`;
+
+const Header = styled.div`
+  padding: 18px 20px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-shrink: 0;
+`;
+
+const HeaderLeft = styled.div`
+  flex: 1;
+  min-width: 0; /* allow text truncation */
+`;
+
+const CategoryLabel = styled.div`
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: ${({ theme }) => theme.colors.accent};
+  margin-bottom: 4px;
+`;
+
+const QuestionText = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: ${({ theme }) => theme.colors.textPrimary};
+  /* FIX: allow long words to wrap instead of overflowing */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+`;
+
+const CloseBtn = styled.button`
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: ${({ theme }) => theme.colors.textMuted};
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 2px 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: all 0.15s;
+  &:hover { color: ${({ theme }) => theme.colors.textPrimary}; background: ${({ theme }) => theme.colors.bgHover}; }
+`;
+
+const TabBar = styled.div`
+  display: flex;
+  gap: 2px;
+  padding: 8px 12px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  background: ${({ theme }) => theme.colors.bgRaised};
+  overflow-x: auto;
+  flex-shrink: 0;
+  /* FIX: hide scrollbar on tab row — tabs are short so it's fine */
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+`;
+
+const Tab = styled.button`
+  padding: 6px 13px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  background: ${({ $active, theme }) => $active ? theme.colors.accentBg : 'transparent'};
+  color: ${({ $active, theme }) => $active ? theme.colors.accent : theme.colors.textSecondary};
+  border: 1px solid ${({ $active, theme }) => $active ? theme.colors.accentBorder : 'transparent'};
+  transition: all 0.15s;
+  &:hover { color: ${({ theme }) => theme.colors.textPrimary}; }
+`;
+
+const Body = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden; /* FIX: no horizontal scroll inside body */
+  padding: 18px 20px;
+  /* FIX: all content inside body wraps properly */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+`;
+
+const LoadingState = styled.div`
+  text-align: center;
+  padding: 48px;
+  color: ${({ theme }) => theme.colors.accent};
+`;
+
+const AnalogyBox = styled.div`
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: ${({ theme }) => theme.radius.md};
+  background: ${({ theme }) => theme.colors.greenBg};
+  border: 1px solid ${({ theme }) => theme.colors.greenBorder};
+`;
+
+const FollowUpItem = styled.div`
+  padding: 11px 14px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  background: ${({ theme }) => theme.colors.bgRaised};
+  font-size: 13px;
+  line-height: 1.55;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 10px;
+  color: ${({ theme }) => theme.colors.textPrimary};
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+`;
+
+const ModalFooter = styled.div`
+  padding: 12px 20px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border};
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+`;
+
+const CloseFooterBtn = styled.button`
+  padding: 8px 18px;
+  border-radius: ${({ theme }) => theme.radius.sm};
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: ${({ theme }) => theme.colors.bgHover};
+  color: ${({ theme }) => theme.colors.textPrimary};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  transition: all 0.15s;
+  &:hover { background: ${({ theme }) => theme.colors.bgActive}; }
+`;
 
 const TABS = ['Quick Answer', 'Deep Dive', 'Follow-ups', 'Avoid Saying'];
 
-export default function ExplainModal({ question, category, onClose, onAskMore }) {
-  const [data,       setData]       = useState(null);
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState('');
-  const [activeTab,  setActiveTab]  = useState(0);
+const ExplainModal = ({ question, category, onClose }) => {
+  const [data,      setData]      = useState(null);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState('');
+  const [activeTab, setActiveTab] = useState(0);
 
-  // Fetch explanation when modal mounts
-  useState(() => {
-    setLoading(true);
-    fetch('http://localhost:5000/api/tech/explain', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, category })
-    })
-    .then(r => r.json())
-    .then(d => { setData(d); setLoading(false); })
-    .catch(err => { setError(err.message); setLoading(false); });
+  useEffect(() => {
+    document.body.classList.add('modal-open');
+    return () => document.body.classList.remove('modal-open');
   }, []);
 
+  useEffect(() => {
+    setLoading(true); setError('');
+    apiFetch('/api/tech/explain', {
+      method: 'POST',
+      body: JSON.stringify({ question, category }),
+    })
+      .then(d => { setData(d); setLoading(false); })
+      .catch(err => { setError(err.message); setLoading(false); });
+  }, [question, category]);
+
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 1000, padding: '16px'
-    }}>
-      <div style={{
-        background: '#fff', borderRadius: '14px', width: '100%',
-        maxWidth: '680px', maxHeight: '85vh', overflow: 'hidden',
-        display: 'flex', flexDirection: 'column'
-      }}>
+    <Overlay
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <Modal
+        initial={{ opacity: 0, y: 28, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0,  scale: 1    }}
+        exit={{    opacity: 0, y: 28, scale: 0.97 }}
+        transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+        onClick={e => e.stopPropagation()}
+      >
+        <Header>
+          <HeaderLeft>
+            <CategoryLabel>{category?.toUpperCase()}</CategoryLabel>
+            <QuestionText>{question}</QuestionText>
+          </HeaderLeft>
+          <CloseBtn onClick={onClose} aria-label="Close">✕</CloseBtn>
+        </Header>
 
-        {/* Header */}
-        <div style={{
-          padding: '18px 22px', borderBottom: '1px solid #e2e8f0',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px'
-        }}>
-          <div>
-            <div style={{ fontSize: '11px', color: '#6366f1', fontWeight: 600,
-              letterSpacing: '1px', marginBottom: '4px' }}>
-              {category?.toUpperCase()}
-            </div>
-            <div style={{ fontSize: '15px', fontWeight: 600, color: '#1e293b', lineHeight: 1.4 }}>
-              {question}
-            </div>
-          </div>
-          <button onClick={onClose} style={{
-            background: 'none', border: 'none', fontSize: '20px',
-            cursor: 'pointer', color: '#94a3b8', flexShrink: 0
-          }}>✕</button>
-        </div>
-
-        {/* Tabs */}
-        <div style={{
-          display: 'flex', gap: '2px', padding: '10px 16px',
-          borderBottom: '1px solid #e2e8f0', background: '#f8fafc'
-        }}>
+        <TabBar>
           {TABS.map((tab, i) => (
-            <button key={tab} onClick={() => setActiveTab(i)}
-              style={{
-                padding: '7px 14px', borderRadius: '8px', fontSize: '13px',
-                border: 'none', cursor: 'pointer', fontWeight: 500,
-                background: activeTab === i ? '#fff' : 'transparent',
-                color:      activeTab === i ? '#1e293b' : '#64748b',
-                boxShadow:  activeTab === i ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-              }}>
+            <Tab key={tab} $active={activeTab === i} onClick={() => setActiveTab(i)}>
               {tab}
-            </button>
+            </Tab>
           ))}
-        </div>
+        </TabBar>
 
-        {/* Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '20px 22px' }}>
+        <Body>
           {loading && (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#6366f1' }}>
-              <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚡</div>
-              <div style={{ fontSize: '14px' }}>Groq is thinking...</div>
-            </div>
+            <LoadingState>
+              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} style={{ fontSize: '28px', marginBottom: '12px' }}>⚡</motion.div>
+              <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Groq is thinking...</div>
+            </LoadingState>
           )}
 
           {error && (
-            <div style={{ color: '#dc2626', padding: '20px', background: '#fef2f2',
-              borderRadius: '8px', fontSize: '14px' }}>
-              Error: {error}
+            <div style={{ color: 'var(--red)', padding: '16px', background: 'var(--red-bg)', borderRadius: '8px', fontSize: '13px' }}>
+              ❌ {error}
             </div>
           )}
 
           {data && !loading && (
             <>
               {activeTab === 0 && (
-                <div>
-                  <p style={{ fontSize: '15px', lineHeight: 1.7, color: '#334155' }}>
-                    {data.quickAnswer}
-                  </p>
-                </div>
+                <p style={{ fontSize: '14px', lineHeight: 1.75, color: 'var(--text-primary)' }}>
+                  {data.quickAnswer}
+                </p>
               )}
+
               {activeTab === 1 && (
-                <div style={{ fontSize: '14px', lineHeight: 1.8, color: '#334155' }}>
+                <div className="markdown-body" style={{ fontSize: '13px', lineHeight: 1.8 }}>
                   <ReactMarkdown>{data.deepDive}</ReactMarkdown>
                 </div>
               )}
-              {activeTab === 2 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {data.followUps?.map((q, i) => (
-                    <div key={i} style={{
-                      padding: '12px 16px', borderRadius: '8px',
-                      border: '1px solid #e2e8f0', background: '#f8fafc',
-                      fontSize: '14px', color: '#334155'
-                    }}>
-                      <span style={{ color: '#6366f1', fontWeight: 700, marginRight: '8px' }}>
-                        {i + 1}.
-                      </span>
-                      {q}
-                    </div>
-                  ))}
-                </div>
-              )}
+
+              {activeTab === 2 && data.followUps?.map((q, i) => (
+                <FollowUpItem key={i}>
+                  <span style={{ color: 'var(--accent)', fontWeight: 700, flexShrink: 0 }}>{i + 1}.</span>
+                  {q}
+                </FollowUpItem>
+              ))}
+
               {activeTab === 3 && (
-                <div>
-                  <p style={{ fontSize: '14px', lineHeight: 1.7, color: '#334155',
-                    padding: '14px 16px', background: '#fff7ed',
-                    border: '1px solid #fed7aa', borderRadius: '8px' }}>
-                    ⚠️ {data.avoidSaying}
-                  </p>
-                </div>
+                <p style={{
+                  fontSize: '13px', lineHeight: 1.75,
+                  padding: '14px 16px',
+                  background: 'var(--amber-bg)',
+                  border: '1px solid var(--amber-border)',
+                  borderRadius: '8px',
+                }}>
+                  ⚠️ {data.avoidSaying}
+                </p>
               )}
 
-              {/* Analogy — always shown below tabs */}
               {data.analogy && (
-                <div style={{
-                  marginTop: '20px', padding: '14px 16px', borderRadius: '8px',
-                  background: '#f0fdf4', border: '1px solid #bbf7d0'
-                }}>
-                  <div style={{ fontSize: '11px', color: '#16a34a', fontWeight: 700,
-                    letterSpacing: '1px', marginBottom: '6px' }}>
+                <AnalogyBox>
+                  <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: 'var(--green)', marginBottom: '6px' }}>
                     💡 ANALOGY
                   </div>
-                  <p style={{ fontSize: '14px', color: '#334155', lineHeight: 1.6, margin: 0 }}>
+                  <p style={{ fontSize: '13px', lineHeight: 1.6, margin: 0, color: 'var(--text-secondary)' }}>
                     {data.analogy}
                   </p>
-                </div>
+                </AnalogyBox>
               )}
             </>
           )}
-        </div>
+        </Body>
 
-        {/* Footer */}
-        {data && (
-          <div style={{
-            padding: '14px 22px', borderTop: '1px solid #e2e8f0',
-            display: 'flex', justifyContent: 'flex-end', gap: '10px'
-          }}>
-            <button onClick={onClose}
-              style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '14px',
-                border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer' }}>
-              Close
-            </button>
-            {onAskMore && (
-              <button
-                onClick={() => { onClose(); onAskMore(question); }}
-                style={{ padding: '8px 18px', borderRadius: '8px', fontSize: '14px',
-                  background: '#6366f1', color: '#fff', border: 'none',
-                  cursor: 'pointer', fontWeight: 600 }}>
-                Ask AI more →
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+        <ModalFooter>
+          <CloseFooterBtn onClick={onClose}>Close</CloseFooterBtn>
+        </ModalFooter>
+      </Modal>
+    </Overlay>
   );
-}
+};
+
+export default ExplainModal;

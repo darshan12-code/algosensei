@@ -1,35 +1,49 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const connectDB = require('./db');
-require('./lib/passport');
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import connectDB from './db.js';
+import './lib/passport.js';
+
+import testRouter      from './routes/test.js';
+import authRouter      from './routes/auth.js';
+import problemsRouter  from './routes/problems.js';
+import techRouter      from './routes/tech.js';
+import chatRouter      from './routes/chat.js';
+import sessionsRouter  from './routes/sessions.js';
+import animateRouter   from './routes/animate.js';
+import quizRouter      from './routes/quiz.js';
+import trackerRouter   from './routes/tracker.js';
+import dashboardRouter from './routes/dashboard.js';
 
 const app = express();
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
-app.use(express.json());
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
+app.use(cors({ origin: CLIENT_URL, credentials: true }));
+app.use(express.json({ limit: '1mb' }));
+
 connectDB();
 
-app.use('/api/test',      require('./routes/test'));
-app.use('/auth',          require('./routes/auth'));
-app.use('/api/problems',  require('./routes/problems'));
-app.use('/api/tech',      require('./routes/tech'));
-app.use('/api/chat',      require('./routes/chat'));
-app.use('/api/sessions',  require('./routes/sessions'));
-app.use('/api/animate',   require('./routes/animate'));
-app.use('/api/quiz',      require('./routes/quiz'));       // ← NEW
-app.use('/api/tracker',   require('./routes/tracker'));   // ← NEW
-app.use('/api/dashboard', require('./routes/dashboard')); // ← NEW
-// 404 — route not found
+app.use('/api/test',      testRouter);
+app.use('/auth',          authRouter);
+app.use('/api/problems',  problemsRouter);
+app.use('/api/tech',      techRouter);
+app.use('/api/chat',      chatRouter);
+app.use('/api/sessions',  sessionsRouter);
+app.use('/api/animate',   animateRouter);
+app.use('/api/quiz',      quizRouter);
+app.use('/api/tracker',   trackerRouter);
+app.use('/api/dashboard', dashboardRouter);
+
+app.get('/', (_req, res) => res.json({ message: 'AlgoSensei API v3 🚀' }));
+
 app.use((req, res) => {
   res.status(404).json({ error: `Route ${req.method} ${req.url} not found` });
 });
 
-// Global error handler — catches anything routes miss
-app.use((err, req, res, next) => {
+app.use((err, _req, res, _next) => {
   console.error('Unhandled error:', err.message);
   res.status(500).json({ error: 'Something went wrong', details: err.message });
 });
-app.get('/', (req, res) => res.json({ message: 'AlgoSensei API running 🚀' }));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));

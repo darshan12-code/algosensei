@@ -1,441 +1,398 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import styled from 'styled-components';
+import { motion, AnimatePresence } from 'framer-motion';
+import { apiFetch } from '../lib/api.js';
+import SkeletonLoader from '../components/SkeletonLoader.jsx';
 
-const API = 'http://localhost:5000';
+const Page = styled.div`
+  max-width: 660px;
+  margin: 0 auto;
+  padding: 32px 16px 80px
+`;
+
+const SetupGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 24px;
+`;
+
+const TopicCard = styled(motion.button)`
+  padding: 14px 12px;
+  border-radius: ${({ theme }) => theme.radius.md};
+  border: 1px solid ${({ $active, theme }) => $active ? theme.colors.accentBorder : theme.colors.border};
+  background: ${({ $active, theme }) => $active ? theme.colors.accentBg : theme.colors.bgSurface};
+  color: ${({ $active, theme }) => $active ? theme.colors.accent : theme.colors.textSecondary};
+  font-size: 13px;
+  font-weight: ${({ $active }) => $active ? 700 : 400};
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+
+  &:hover { border-color: ${({ theme }) => theme.colors.accentBorder}; }
+`;
+
+const QuestionCard = styled(motion.div)`
+  background: ${({ theme }) => theme.colors.bgSurface};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.radius.lg};
+  padding: 24px;
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.6;
+`;
+
+const OptionBtn = styled(motion.button)`
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: ${({ theme }) => theme.radius.md};
+  border: 1px solid ${({ $state, theme }) =>
+    $state === 'correct' ? theme.colors.greenBorder :
+    $state === 'wrong'   ? theme.colors.redBorder :
+    $state === 'selected' ? theme.colors.accentBorder : theme.colors.border};
+  background: ${({ $state, theme }) =>
+    $state === 'correct' ? theme.colors.greenBg :
+    $state === 'wrong'   ? theme.colors.redBg :
+    $state === 'selected' ? theme.colors.accentBg : theme.colors.bgSurface};
+  color: ${({ theme }) => theme.colors.textPrimary};
+  font-size: 14px;
+  font-weight: 500;
+  cursor: ${({ disabled }) => disabled ? 'default' : 'pointer'};
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  transition: all 0.15s;
+
+  &:hover:not(:disabled) { border-color: ${({ theme }) => theme.colors.accentBorder}; }
+`;
+
+const TimerBadge = styled(motion.div)`
+  font-size: 18px;
+  font-weight: 800;
+  padding: 6px 16px;
+  border-radius: 20px;
+  border: 2px solid ${({ $color }) => $color};
+  color: ${({ $color }) => $color};
+  background: ${({ $color }) => $color}18;
+  min-width: 64px;
+  text-align: center;
+`;
+
+const ProgressBar = styled.div`
+  height: 4px;
+  background: ${({ theme }) => theme.colors.bgHover};
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 20px;
+`;
+
+const ProgressFill = styled(motion.div)`
+  height: 100%;
+  border-radius: 4px;
+  background: ${({ theme }) => theme.colors.accent};
+`;
+
+const ScoreRing = styled.div`
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const ScoreLabel = styled.div`
+  position: absolute;
+  font-size: 28px;
+  font-weight: 800;
+  color: ${({ $color }) => $color};
+`;
+
+const ExplanationBox = styled(motion.div)`
+  padding: 14px 16px;
+  border-radius: ${({ theme }) => theme.radius.md};
+  background: ${({ $correct, theme }) => $correct ? theme.colors.greenBg : theme.colors.redBg};
+  border: 1px solid ${({ $correct, theme }) => $correct ? theme.colors.greenBorder : theme.colors.redBorder};
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+`;
+
+const Btn = styled.button`
+  padding: 12px 24px;
+  border-radius: ${({ theme }) => theme.radius.md};
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: ${({ $primary, theme }) => $primary ? theme.colors.accent : theme.colors.bgSurface};
+  color: ${({ $primary }) => $primary ? '#fff' : 'inherit'};
+  border: 1px solid ${({ $primary, theme }) => $primary ? 'transparent' : theme.colors.border};
+
+  &:hover { opacity: 0.85; transform: translateY(-1px); }
+`;
+
 const TIMER_SECONDS = 30;
-
 const TOPICS = {
   dsa:  ['Array', 'HashMap', 'Two Pointers', 'Sliding Window', 'Stack', 'Binary Search', 'LinkedList', 'Tree'],
   tech: ['JavaScript', 'React', 'Node.js', 'Backend', 'System Design', 'CS Fundamentals', 'Behavioral'],
 };
 
 export default function Quiz() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-
-  // Setup state
-  const [screen,    setScreen]    = useState('setup');   // setup | loading | quiz | result
-  const [topic,     setTopic]     = useState(searchParams.get('topic') || 'HashMap');
-  const [type,      setType]      = useState(searchParams.get('type')  || 'dsa');
-
-  // Quiz state
+  const [screen, setScreen]     = useState('setup');
+  const [type, setType]         = useState('dsa');
+  const [topic, setTopic]       = useState(TOPICS.dsa[0]);
   const [questions, setQuestions] = useState([]);
-  const [qIdx,      setQIdx]      = useState(0);
-  const [selected,  setSelected]  = useState(null);   // index of chosen option
-  const [revealed,  setRevealed]  = useState(false);  // show correct/wrong
-  const [answers,   setAnswers]   = useState([]);     // { correct: bool, selected, qIdx }
-  const [timeLeft,  setTimeLeft]  = useState(TIMER_SECONDS);
-  const [error,     setError]     = useState('');
-
+  const [qIdx, setQIdx]         = useState(0);
+  const [answers, setAnswers]   = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [revealed, setRevealed] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(TIMER_SECONDS);
+  const [error, setError]       = useState('');
   const timerRef = useRef(null);
 
   const currentQ = questions[qIdx];
   const score = answers.filter(a => a.correct).length;
 
-  // ── Timer ──────────────────────────────────────────────────
   useEffect(() => {
     if (screen !== 'quiz' || revealed) return;
     timerRef.current = setInterval(() => {
       setTimeLeft(t => {
-        if (t <= 1) { handleTimeout(); return 0; }
+        if (t <= 1) { clearInterval(timerRef.current); submitAnswer(null); return 0; }
         return t - 1;
       });
     }, 1000);
     return () => clearInterval(timerRef.current);
   }, [screen, qIdx, revealed]);
 
-  const handleTimeout = () => {
-    clearInterval(timerRef.current);
-    // Auto-submit as wrong answer
-    submitAnswer(null);
-  };
-
-  // ── Generate quiz ──────────────────────────────────────────
   const startQuiz = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) { alert('Please log in first'); return; }
-
-    setScreen('loading');
-    setError('');
-
+    setError(''); setScreen('loading');
     try {
-      const res = await fetch(`${API}/api/quiz/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ topic, type }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await apiFetch('/api/quiz/generate', { method: 'POST', body: JSON.stringify({ topic, type }) });
       setQuestions(data.questions);
-      setQIdx(0);
-      setAnswers([]);
-      setTimeLeft(TIMER_SECONDS);
-      setSelected(null);
-      setRevealed(false);
-      setScreen('quiz');
-    } catch (err) {
-      setError(err.message);
-      setScreen('setup');
-    }
+      setQIdx(0); setAnswers([]); setTimeLeft(TIMER_SECONDS);
+      setSelected(null); setRevealed(false); setScreen('quiz');
+    } catch (err) { setError(err.message); setScreen('setup'); }
   };
 
-  // ── Answer handling ────────────────────────────────────────
   const submitAnswer = async (optionIdx) => {
     if (revealed) return;
     clearInterval(timerRef.current);
-
-    const correct = optionIdx === currentQ.correct;
-    setSelected(optionIdx);
-    setRevealed(true);
-
-    const newAnswer = { qIdx, selected: optionIdx, correct };
-    const newAnswers = [...answers, newAnswer];
+    const correct = optionIdx === currentQ?.correct;
+    setSelected(optionIdx); setRevealed(true);
+    const newAnswers = [...answers, { qIdx, selected: optionIdx, correct }];
     setAnswers(newAnswers);
 
-    // Update weak topic tracker
-    const token = localStorage.getItem('token');
-    if (token) {
-      fetch(`${API}/api/tracker/update`, {
-        method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ topic, type, failed: !correct }),
-      }).catch(console.error);
-    }
-
-    // Auto-advance after 2.5 seconds
     setTimeout(() => {
       if (qIdx < questions.length - 1) {
-        setQIdx(q => q + 1);
-        setSelected(null);
-        setRevealed(false);
-        setTimeLeft(TIMER_SECONDS);
-      } else {
-        // Quiz complete — save result
-        finishQuiz(newAnswers);
-      }
+        setQIdx(q => q + 1); setSelected(null); setRevealed(false); setTimeLeft(TIMER_SECONDS);
+      } else { finishQuiz(newAnswers); }
     }, 2500);
   };
 
   const finishQuiz = async (finalAnswers) => {
-    const token = localStorage.getItem('token');
-    const finalScore = Math.round(
-      (finalAnswers.filter(a => a.correct).length / questions.length) * 100
-    );
-
-    if (token) {
-      fetch(`${API}/api/quiz/result`, {
+    const finalScore = Math.round((finalAnswers.filter(a => a.correct).length / questions.length) * 100);
+    try {
+      await apiFetch('/api/quiz/complete', {
         method: 'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
         body: JSON.stringify({
-          topic,
-          score: finalScore,
-          questions: finalAnswers.map((a, i) => ({
-            question: questions[i]?.question,
-            userAnswer: questions[i]?.options[a.selected] || 'Timed out',
-            correct: a.correct,
-          })),
+          topic, type, score: finalScore,
+          questions: finalAnswers.map((a, i) => ({ question: questions[i]?.question, userAnswer: questions[i]?.options[a.selected] || 'Timed out', correct: a.correct })),
+          answers: finalAnswers,
         }),
-      }).catch(console.error);
-    }
-
+      });
+    } catch { /* non-blocking */ }
     setScreen('result');
   };
 
-  // ── Timer color ────────────────────────────────────────────
-  const timerColor = timeLeft > 15 ? '#16a34a' : timeLeft > 7 ? '#ca8a04' : '#dc2626';
+  const timerColor = timeLeft > 15 ? '#22c55e' : timeLeft > 7 ? '#f59e0b' : '#ef4444';
 
-  // ── Option button style ────────────────────────────────────
-  const optionStyle = (i) => {
-    let bg = '#f8fafc', border = '#e2e8f0', color = '#334155';
+  if (screen === 'setup') return (
+    <Page>
+      <motion.h1 initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: '28px', fontWeight: 800, marginBottom: '4px' }}>
+        📝 Quiz Mode
+      </motion.h1>
+      <p style={{ color: 'var(--text-secondary)', marginBottom: '28px', fontSize: '14px' }}>
+        5 AI-generated questions · 30s per question · scored instantly
+      </p>
+      {error && <div style={{ padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', background: 'var(--red-bg)', border: '1px solid var(--red-border)', fontSize: '13px', color: 'var(--red)' }}>❌ {error}</div>}
 
-    if (revealed) {
-      if (i === currentQ.correct) {
-        bg = '#dcfce7'; border = '#4ade80'; color = '#166534';
-      } else if (i === selected && i !== currentQ.correct) {
-        bg = '#fee2e2'; border = '#f87171'; color = '#991b1b';
-      }
-    } else if (selected === i) {
-      bg = '#ede9fe'; border = '#a5b4fc'; color = '#4f46e5';
-    }
-
-    return {
-      width: '100%', padding: '14px 16px', borderRadius: '10px',
-      border: `2px solid ${border}`, background: bg, color,
-      fontSize: '14px', textAlign: 'left', cursor: revealed ? 'default' : 'pointer',
-      fontFamily: 'inherit', fontWeight: revealed && i === currentQ.correct ? 700 : 400,
-      transition: 'all 0.2s',
-    };
-  };
-
-  // ─────────────────────────────────────────────────────────
-  // RENDER: Setup screen
-  // ─────────────────────────────────────────────────────────
-  if (screen === 'setup') {
-    return (
-      <div style={{ maxWidth: '560px', margin: '40px auto', padding: '0 16px' }}>
-        <h1 style={{ fontSize: '26px', fontWeight: 800, marginBottom: '6px' }}>📝 Quiz Mode</h1>
-        <p style={{ color: '#64748b', marginBottom: '28px', fontSize: '14px' }}>
-          5 AI-generated questions · 30 seconds per question · scored instantly
-        </p>
-
-        {error && (
-          <div style={{ padding: '12px 16px', borderRadius: '8px', marginBottom: '16px',
-            background: '#fee2e2', border: '1px solid #fca5a5',
-            fontSize: '13px', color: '#991b1b' }}>
-            ❌ {error}
-          </div>
-        )}
-
-        {/* Type toggle */}
-        <div style={{ marginBottom: '20px' }}>
-          <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700,
-            letterSpacing: '1px', marginBottom: '8px' }}>QUIZ TYPE</div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {['dsa', 'tech'].map(t => (
-              <button key={t} onClick={() => { setType(t); setTopic(TOPICS[t][0]); }}
-                style={{
-                  padding: '8px 20px', borderRadius: '8px', fontSize: '14px',
-                  fontWeight: 600, border: '2px solid', cursor: 'pointer',
-                  borderColor: type === t ? '#6366f1' : '#e2e8f0',
-                  background:  type === t ? '#ede9fe' : '#fff',
-                  color:       type === t ? '#4f46e5' : '#475569',
-                }}>
-                {t === 'dsa' ? '💻 DSA' : '🎯 Tech'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Topic picker */}
-        <div style={{ marginBottom: '28px' }}>
-          <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700,
-            letterSpacing: '1px', marginBottom: '8px' }}>TOPIC</div>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {TOPICS[type].map(t => (
-              <button key={t} onClick={() => setTopic(t)}
-                style={{
-                  padding: '7px 16px', borderRadius: '20px', fontSize: '13px',
-                  fontWeight: 500, border: '1.5px solid', cursor: 'pointer',
-                  borderColor: topic === t ? '#6366f1' : '#e2e8f0',
-                  background:  topic === t ? '#6366f1' : '#fff',
-                  color:       topic === t ? '#fff'    : '#475569',
-                  transition: 'all 0.15s',
-                }}>
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <button onClick={startQuiz}
-          style={{
-            width: '100%', padding: '14px', borderRadius: '10px', fontSize: '15px',
-            fontWeight: 700, border: 'none', background: '#6366f1', color: '#fff',
-            cursor: 'pointer',
-          }}>
-          Start Quiz — {topic} →
-        </button>
+      <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '8px' }}>QUIZ TYPE</div>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+        {['dsa', 'tech'].map(t => (
+          <Btn key={t} $primary={type === t} onClick={() => { setType(t); setTopic(TOPICS[t][0]); }}>
+            {t === 'dsa' ? '💻 DSA' : '🎯 Tech'}
+          </Btn>
+        ))}
       </div>
-    );
-  }
 
-  // RENDER: Loading
-  if (screen === 'loading') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
-        justifyContent: 'center', height: '60vh', gap: '16px' }}>
-        <div style={{ fontSize: '36px' }}>⚡</div>
-        <div style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b' }}>
-          Generating {topic} quiz...
-        </div>
-        <div style={{ fontSize: '13px', color: '#64748b' }}>Groq is crafting 5 questions</div>
-      </div>
-    );
-  }
+      <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '2px', color: 'var(--text-muted)', marginBottom: '8px' }}>TOPIC</div>
+      <SetupGrid>
+        {TOPICS[type].map(t => (
+          <TopicCard key={t} $active={topic === t} onClick={() => setTopic(t)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            {t}
+          </TopicCard>
+        ))}
+      </SetupGrid>
 
-  // RENDER: Result screen
+      <Btn $primary onClick={startQuiz} style={{ width: '100%', padding: '14px', fontSize: '15px', justifyContent: 'center' }}>
+        Start Quiz — {topic} →
+      </Btn>
+    </Page>
+  );
+
+  if (screen === 'loading') return (
+    <Page style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }} style={{ fontSize: '32px', marginBottom: '16px' }}>⚡</motion.div>
+      <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '24px' }}>Generating {topic} quiz...</div>
+      <SkeletonLoader count={3} />
+    </Page>
+  );
+
   if (screen === 'result') {
     const pct = Math.round((score / questions.length) * 100);
-    const grade = pct >= 80 ? { label: 'Excellent! 🎉', color: '#16a34a', bg: '#dcfce7' }
-                : pct >= 60 ? { label: 'Good job 👍',   color: '#ca8a04', bg: '#fef9c3' }
-                :             { label: 'Keep grinding 💪', color: '#dc2626', bg: '#fee2e2' };
-
+    const ringColor = pct >= 80 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444';
+    const c = 2 * Math.PI * 45;
     return (
-      <div style={{ maxWidth: '560px', margin: '40px auto', padding: '0 16px' }}>
-        {/* Score card */}
-        <div style={{ textAlign: 'center', padding: '32px', borderRadius: '16px',
-          background: grade.bg, border: `2px solid ${grade.color}`, marginBottom: '24px' }}>
-          <div style={{ fontSize: '48px', fontWeight: 800, color: grade.color, marginBottom: '8px' }}>
-            {pct}%
+      <Page>
+        <ScoreRing>
+          <svg width="120" height="120" viewBox="0 0 100 100" style={{ position: 'absolute' }}>
+            <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
+            <motion.circle
+              cx="50" cy="50" r="45" fill="none" stroke={ringColor} strokeWidth="8"
+              strokeLinecap="round" strokeDasharray={c}
+              initial={{ strokeDashoffset: c }}
+              animate={{ strokeDashoffset: c - (pct / 100) * c }}
+              transition={{ duration: 1.2, ease: [0.16,1,0.3,1] }}
+              style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }}
+            />
+          </svg>
+          <ScoreLabel $color={ringColor}>{pct}%</ScoreLabel>
+        </ScoreRing>
+
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 700, marginBottom: '6px' }}>
+            {pct >= 80 ? 'Excellent! 🎉' : pct >= 60 ? 'Good job 👍' : 'Keep grinding 💪'}
           </div>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: grade.color, marginBottom: '6px' }}>
-            {grade.label}
-          </div>
-          <div style={{ fontSize: '14px', color: '#475569' }}>
-            {score} / {questions.length} correct · {topic}
-          </div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>{score}/{questions.length} correct · {topic}</div>
         </div>
 
-        {/* Review each question */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
           {questions.map((q, i) => {
             const ans = answers[i];
-            const correct = ans?.correct;
             return (
-              <div key={i} style={{
-                padding: '16px', borderRadius: '12px',
-                border: `1px solid ${correct ? '#bbf7d0' : '#fca5a5'}`,
-                background: correct ? '#f0fdf4' : '#fff5f5',
-              }}>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px',
-                  alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: '16px', flexShrink: 0 }}>
-                    {correct ? '✅' : '❌'}
-                  </span>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b',
-                    lineHeight: 1.5 }}>
-                    {q.question}
-                  </span>
+              <div key={i} style={{ padding: '14px 16px', borderRadius: '10px', border: `1px solid ${ans?.correct ? '#22c55e44' : '#ef444444'}`, background: ans?.correct ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', fontSize: '13px' }}>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                  <span>{ans?.correct ? '✅' : '❌'}</span>
+                  <span style={{ fontWeight: 600, lineHeight: 1.5 }}>{q.question}</span>
                 </div>
-                <div style={{ fontSize: '12px', color: '#475569', marginBottom: '6px',
-                  paddingLeft: '24px' }}>
-                  Correct: <b style={{ color: '#16a34a' }}>{q.options[q.correct]}</b>
-                  {!correct && ans?.selected != null && (
-                    <> · Your answer: <b style={{ color: '#dc2626' }}>{q.options[ans.selected]}</b></>
-                  )}
-                  {!correct && ans?.selected == null && (
-                    <> · <b style={{ color: '#dc2626' }}>Timed out</b></>
-                  )}
+                <div style={{ color: 'var(--text-secondary)', paddingLeft: '24px' }}>
+                  Correct: <b style={{ color: '#22c55e' }}>{q.options[q.correct]}</b>
+                  {!ans?.correct && ans?.selected != null && <> · Yours: <b style={{ color: '#ef4444' }}>{q.options[ans.selected]}</b></>}
+                  {!ans?.correct && ans?.selected == null && <> · <b style={{ color: '#ef4444' }}>Timed out</b></>}
                 </div>
-                <div style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.6,
-                  paddingLeft: '24px', fontStyle: 'italic' }}>
-                  {q.explanation}
-                </div>
+                {q.explanation && <div style={{ color: 'var(--text-muted)', paddingLeft: '24px', marginTop: '4px', fontStyle: 'italic' }}>{q.explanation}</div>}
               </div>
             );
           })}
         </div>
 
-        {/* Actions */}
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={() => setScreen('setup')}
-            style={{ flex: 1, padding: '12px', borderRadius: '8px', fontSize: '14px',
-              fontWeight: 600, border: '1px solid #e2e8f0', background: '#fff',
-              cursor: 'pointer' }}>
-            Try Another Topic
-          </button>
-          <button onClick={() => { setScreen('setup'); setTopic(topic); setTimeout(startQuiz, 100); }}
-            style={{ flex: 1, padding: '12px', borderRadius: '8px', fontSize: '14px',
-              fontWeight: 700, border: 'none', background: '#6366f1', color: '#fff',
-              cursor: 'pointer' }}>
-            Retry {topic} →
-          </button>
+          <Btn onClick={() => setScreen('setup')} style={{ flex: 1, justifyContent: 'center' }}>Try Another Topic</Btn>
+          <Btn $primary onClick={() => navigate(`/problems?topic=${encodeURIComponent(topic)}`)} style={{ flex: 1, justifyContent: 'center' }}>Practice Weak Topics →</Btn>
         </div>
-      </div>
+      </Page>
     );
   }
 
-  // RENDER: Quiz in progress
+  // Quiz in progress
+  const optionState = (i) => {
+    if (revealed && i === currentQ?.correct) return 'correct';
+    if (revealed && i === selected && i !== currentQ?.correct) return 'wrong';
+    if (!revealed && selected === i) return 'selected';
+    return 'default';
+  };
+
   return (
-    <div style={{ maxWidth: '620px', margin: '32px auto', padding: '0 16px' }}>
-
-      {/* Progress bar + meta */}
-      <div style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between',
-          alignItems: 'center', marginBottom: '8px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: '#64748b' }}>
-            Question {qIdx + 1} of {questions.length} · {topic}
-          </span>
-          {/* Timer */}
-          <div style={{
-            fontSize: '16px', fontWeight: 800, color: timerColor,
-            background: timerColor + '18', padding: '4px 14px',
-            borderRadius: '20px', border: `2px solid ${timerColor}`,
-            minWidth: '56px', textAlign: 'center', transition: 'color 0.3s',
-          }}>
-            {timeLeft}s
-          </div>
-        </div>
-        {/* Progress bar */}
-        <div style={{ height: '4px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-          <div style={{
-            height: '100%', borderRadius: '4px', background: '#6366f1',
-            width: `${((qIdx) / questions.length) * 100}%`,
-            transition: 'width 0.3s',
-          }} />
-        </div>
+    <Page>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>
+          Question {qIdx + 1} of {questions.length} · {topic}
+        </span>
+        <TimerBadge $color={timerColor} animate={timeLeft <= 10 ? { scale: [1, 1.05, 1] } : {}} transition={{ repeat: Infinity, duration: 0.6 }}>
+          {timeLeft}s
+        </TimerBadge>
       </div>
 
-      {/* Question */}
-      <div style={{
-        padding: '22px', borderRadius: '14px', background: '#fff',
-        border: '1px solid #e2e8f0', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
-      }}>
-        <div style={{ fontSize: '16px', fontWeight: 600, color: '#1e293b', lineHeight: 1.6 }}>
+      <ProgressBar>
+        <ProgressFill
+          initial={{ width: 0 }}
+          animate={{ width: `${(qIdx / questions.length) * 100}%` }}
+          transition={{ duration: 0.4 }}
+        />
+      </ProgressBar>
+
+      <AnimatePresence mode="wait">
+        <QuestionCard
+          key={qIdx}
+          initial={{ opacity: 0, x: 30 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -30 }}
+          transition={{ duration: 0.25 }}
+        >
           {currentQ?.question}
-        </div>
-      </div>
+        </QuestionCard>
+      </AnimatePresence>
 
-      {/* Options */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-        {currentQ?.options.map((opt, i) => (
-          <button key={i} onClick={() => submitAnswer(i)} style={optionStyle(i)}>
-            <span style={{ fontWeight: 700, marginRight: '10px', color: '#94a3b8' }}>
-              {['A', 'B', 'C', 'D'][i]}.
-            </span>
-            {opt}
-            {revealed && i === currentQ.correct && (
-              <span style={{ marginLeft: '8px' }}>✓</span>
-            )}
-            {revealed && i === selected && i !== currentQ.correct && (
-              <span style={{ marginLeft: '8px' }}>✗</span>
-            )}
-          </button>
-        ))}
-      </div>
+      {currentQ?.options.map((opt, i) => (
+        <OptionBtn
+          key={i}
+          $state={optionState(i)}
+          onClick={() => submitAnswer(i)}
+          disabled={revealed}
+          whileHover={!revealed ? { scale: 1.01 } : {}}
+          whileTap={!revealed ? { scale: 0.99 } : {}}
+        >
+          <span style={{ fontWeight: 700, color: 'var(--text-muted)', minWidth: '20px' }}>
+            {['A', 'B', 'C', 'D'][i]}.
+          </span>
+          {opt}
+          {revealed && i === currentQ.correct && <span style={{ marginLeft: 'auto' }}>✓</span>}
+          {revealed && i === selected && i !== currentQ.correct && <span style={{ marginLeft: 'auto' }}>✗</span>}
+        </OptionBtn>
+      ))}
 
-      {/* Explanation — shown after answering */}
-      {revealed && (
-        <div style={{
-          padding: '14px 16px', borderRadius: '10px', marginBottom: '8px',
-          background: answers[answers.length - 1]?.correct ? '#f0fdf4' : '#fff5f5',
-          border: `1px solid ${answers[answers.length - 1]?.correct ? '#bbf7d0' : '#fca5a5'}`,
-          fontSize: '13px', color: '#334155', lineHeight: 1.6,
-        }}>
-          <b style={{ color: '#1e293b' }}>
-            {answers[answers.length - 1]?.correct ? '✅ Correct! ' : '❌ Wrong. '}
-          </b>
-          {currentQ?.explanation}
-          <div style={{ marginTop: '8px', fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>
-            Auto-advancing in 2.5 seconds...
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {revealed && (
+          <ExplanationBox
+            $correct={answers[answers.length - 1]?.correct}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+          >
+            <b>{answers[answers.length - 1]?.correct ? '✅ Correct! ' : '❌ Wrong. '}</b>
+            {currentQ?.explanation}
+            <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              Auto-advancing in 2.5 seconds...
+            </div>
+          </ExplanationBox>
+        )}
+      </AnimatePresence>
 
-      {/* Score so far */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '12px' }}>
         {answers.map((a, i) => (
-          <div key={i} style={{
-            width: '10px', height: '10px', borderRadius: '50%',
-            background: a.correct ? '#4ade80' : '#f87171',
-          }} />
+          <motion.div key={i} initial={{ scale: 0 }} animate={{ scale: 1 }} style={{ width: '10px', height: '10px', borderRadius: '50%', background: a.correct ? '#4ade80' : '#f87171' }} />
         ))}
         {Array(questions.length - answers.length).fill(0).map((_, i) => (
-          <div key={`empty-${i}`} style={{
-            width: '10px', height: '10px', borderRadius: '50%',
-            background: '#e2e8f0',
-          }} />
+          <div key={`e-${i}`} style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)' }} />
         ))}
       </div>
-    </div>
+    </Page>
   );
 }

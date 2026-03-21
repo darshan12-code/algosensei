@@ -1,7 +1,7 @@
-const mongoose = require('mongoose');
-require('dotenv').config();
-const dns = require('dns');
-dns.setServers(['8.8.8.8', '8.8.4.4']); // force Google DNS
+import mongoose from 'mongoose';
+import dns from 'dns';
+
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const connectDB = async () => {
   try {
@@ -9,9 +9,8 @@ const connectDB = async () => {
     console.log('✅ MongoDB connected');
   } catch (err) {
     console.error('❌ MongoDB connection failed:', err.message);
-    console.log('URI:', process.env.MONGODB_URI);
     process.exit(1);
   }
 };
 
-module.exports = connectDB;
+export default connectDB;

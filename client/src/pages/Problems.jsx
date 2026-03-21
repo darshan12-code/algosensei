@@ -1,260 +1,305 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import Visualizer from '../components/Visualizer';
-const API = 'http://localhost:5000';
+// client/src/pages/Problems.jsx
+// Fix: uses CollapsibleSidebar instead of raw Sidebar for mobile expand/collapse
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import styled from 'styled-components';
+import { motion, AnimatePresence } from 'framer-motion';
+import Visualizer from '../components/Visualizer.jsx';
+import SkeletonLoader from '../components/SkeletonLoader.jsx';
+import { apiFetch } from '../lib/api.js';
+import { PRESETS } from '../lib/animations.js';
+import {
+  PageLayout, TwoColLayout, CollapsibleSidebar, MainContent,
+  PageTitle, PageSubtitle, SectionLabel,
+  Btn, DiffBadge, FilterBtn, FilterCount,
+  ProgressBar, ProgressFill, EmptyBox, Input,
+} from '../components/ui.jsx';
 
-const DIFF_COLOR = {
-  Easy:   { bg: '#dcfce7', color: '#16a34a' },
-  Medium: { bg: '#fef9c3', color: '#ca8a04' },
-  Hard:   { bg: '#fee2e2', color: '#dc2626' },
+const useDebounce = (value, delay) => {
+  const [d, setD] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setD(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return d;
 };
+
+const getPresetForProblem = (problem) => {
+  const t = (problem.title || '').toLowerCase();
+  if (t.includes('bubble sort'))       return PRESETS.bubbleSort();
+  if (t.includes('binary search'))     return PRESETS.binarySearch();
+  if (t.includes('two sum'))           return PRESETS.twoSum();
+  if (t.includes('valid parentheses')) return PRESETS.validParentheses();
+  if (t.includes('reverse linked'))    return PRESETS.reverseLinkedList();
+  if (t.includes('insertion sort'))    return PRESETS.insertionSort();
+  if (t.includes('selection sort'))    return PRESETS.selectionSort();
+  if (t.includes('median') && t.includes('sorted')) return PRESETS.medianTwoSortedArrays?.();
+  return null;
+};
+
+/* ── Local styled components ─────────────────────────────── */
+const ProblemRow = styled(motion.div)`
+  border: 1px solid ${({ theme }) => theme.colors.borderLight};
+  border-radius: ${({ theme }) => theme.radius.md};
+  background: ${({ theme }) => theme.colors.bgRaised};
+  margin-bottom: 8px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+  &:hover { border-color: ${({ theme }) => theme.colors.border}; }
+`;
+
+const ProblemHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  cursor: pointer;
+  user-select: none;
+  &:hover { background: ${({ theme }) => theme.colors.bgSurface}; }
+`;
+
+const ProblemNum = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  font-family: ${({ theme }) => theme.fonts.mono};
+  color: ${({ theme }) => theme.colors.textMuted};
+  min-width: 36px;
+`;
+
+const ProblemTitle = styled.span`
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1;
+  color: ${({ theme }) => theme.colors.textPrimary};
+`;
+
+const SolvedMark = styled.span`
+  color: ${({ theme }) => theme.colors.green};
+  font-size: 13px;
+  flex-shrink: 0;
+`;
+
+const ExpandBody = styled(motion.div)`
+  padding: 0 16px 16px;
+  border-top: 1px solid ${({ theme }) => theme.colors.borderLight};
+  overflow: hidden;
+`;
+
+const TopicTag = styled.span`
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: ${({ theme }) => theme.colors.accentBg};
+  color: ${({ theme }) => theme.colors.accent};
+`;
+
+const ExampleBox = styled.div`
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 12px;
+  background: ${({ theme }) => theme.colors.bgActive};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  overflow-x: auto;
+`;
 
 export default function Problems() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [problems,  setProblems]  = useState([]);
   const [meta,      setMeta]      = useState({ topics: [], companies: [] });
+  const [solvedIds, setSolvedIds] = useState([]);
   const [loading,   setLoading]   = useState(true);
+  const [animData,  setAnimData]  = useState({});
+  const [animating, setAnimating] = useState(null);
+  const [expanded,  setExpanded]  = useState(null);
+  const [total,     setTotal]     = useState(0);
+  const [visible,   setVisible]   = useState(20);
 
-  // filters
-  const [topic,      setTopic]      = useState('');
-  const [difficulty, setDifficulty] = useState('');
-  const [company,    setCompany]    = useState('');
-  const [search,     setSearch]     = useState('');
+  const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
+  const debouncedSearch = useDebounce(searchInput, 300);
 
-  const [animating,   setAnimating]   = useState(null);  // problemId being animated
-const [animData,    setAnimData]    = useState({});     // { problemId: vizData }
-  const navigate = useNavigate();
+  const topic      = searchParams.get('topic')      || '';
+  const difficulty = searchParams.get('difficulty') || '';
+  const company    = searchParams.get('company')    || '';
 
-  // fetch filter metadata once
+  const setParam = useCallback((key, val) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      if (val) p.set(key, val); else p.delete(key);
+      return p;
+    });
+  }, [setSearchParams]);
+
+  useEffect(() => { setParam('search', debouncedSearch); }, [debouncedSearch]); // eslint-disable-line
+
   useEffect(() => {
-    axios.get(`${API}/api/problems/meta`)
-      .then(r => setMeta(r.data))
-      .catch(console.error);
+    apiFetch('/api/problems/meta').then(setMeta).catch(console.error);
+    apiFetch('/api/problems/solved').then(setSolvedIds).catch(() => {});
   }, []);
 
-  // fetch problems whenever any filter changes
+  useEffect(() => { setVisible(20); }, [topic, difficulty, company, debouncedSearch]);
+
   useEffect(() => {
     setLoading(true);
-    const params = {};
-    if (topic)      params.topic      = topic;
-    if (difficulty) params.difficulty = difficulty;
-    if (company)    params.company    = company;
-    if (search)     params.search     = search;
+    const qs = new URLSearchParams();
+    if (topic)           qs.set('topic', topic);
+    if (difficulty)      qs.set('difficulty', difficulty);
+    if (company)         qs.set('company', company);
+    if (debouncedSearch) qs.set('search', debouncedSearch);
 
-    axios.get(`${API}/api/problems`, { params })
-      .then(r => { setProblems(r.data); setLoading(false); })
-      .catch(err => { console.error(err); setLoading(false); });
-  }, [topic, difficulty, company, search]);
+    apiFetch(`/api/problems?${qs}`)
+      .then(d => { setProblems(d.problems || d); setTotal(d.total || (d.problems || d).length); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [topic, difficulty, company, debouncedSearch]);
 
-  const clearFilters = () => {
-    setTopic(''); setDifficulty(''); setCompany(''); setSearch('');
+  const animateProblem = async (problem) => {
+    if (animData[problem._id]) {
+      setAnimData(p => { const n = { ...p }; delete n[problem._id]; return n; });
+      return;
+    }
+    setAnimating(problem._id);
+    try {
+      const preset = getPresetForProblem(problem);
+      if (preset) { setAnimData(p => ({ ...p, [problem._id]: preset })); return; }
+      const d = await apiFetch('/api/animate', { method: 'POST', body: JSON.stringify({ input: `${problem.title}: ${problem.description || ''}` }) });
+      setAnimData(p => ({ ...p, [problem._id]: d }));
+    } catch (err) { alert('Animation failed: ' + err.message); }
+    finally { setAnimating(null); }
   };
 
-  const hasFilters = topic || difficulty || company || search;
-  const animateProblem = async (problem) => {
-  const token = localStorage.getItem('token');
-  if (!token) { alert('Please log in'); return; }
+  const solvedCount = problems.filter(p => solvedIds.includes(p._id)).length;
+  const visibleProblems = problems.slice(0, visible);
 
-  // Toggle off if already showing
-  if (animData[problem._id]) {
-    setAnimData(prev => { const n = {...prev}; delete n[problem._id]; return n; });
-    return;
-  }
+  const activeFilterCount = [topic, difficulty, company].filter(Boolean).length;
 
-  setAnimating(problem._id);
-  try {
-    const res = await fetch(`${API}/api/animate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        input: `${problem.title}: ${problem.description}`
-      }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setAnimData(prev => ({ ...prev, [problem._id]: data }));
-    }
-  } catch (err) {
-    console.error('Animate error:', err);
-  } finally {
-    setAnimating(null);
-  }
-};
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', padding: '24px 16px' }}>
-
-      {/* Header */}
-      <div style={{ marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '4px' }}>
-          DSA Problems
-        </h1>
-        <p style={{ color: '#666', fontSize: '14px' }}>
-          {problems.length} problems · Filter by topic, difficulty, or company
-        </p>
-      </div>
-
-      {/* Search */}
-      <input
-        placeholder="Search problems..."
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        style={{
-          width: '100%', padding: '10px 14px', fontSize: '14px',
-          border: '1px solid #ddd', borderRadius: '8px',
-          marginBottom: '12px', boxSizing: 'border-box'
-        }}
-      />
-
-      {/* Filter Bar */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px', alignItems: 'center' }}>
-
-        {/* Topic pills */}
-        {['', ...meta.topics].map(t => (
-          <button key={t || 'all'} onClick={() => setTopic(t)}
-            style={{
-              padding: '6px 14px', borderRadius: '20px', fontSize: '13px',
-              cursor: 'pointer', border: '1px solid',
-              background: topic === t ? '#1e293b' : '#f8fafc',
-              color:      topic === t ? '#fff'     : '#475569',
-              borderColor: topic === t ? '#1e293b' : '#e2e8f0',
-              fontWeight: topic === t ? 600 : 400,
-            }}>
-            {t || 'All Topics'}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px', alignItems: 'center' }}>
-
-        {/* Difficulty */}
-        {['', 'Easy', 'Medium', 'Hard'].map(d => (
-          <button key={d || 'all-diff'} onClick={() => setDifficulty(d)}
-            style={{
-              padding: '6px 14px', borderRadius: '20px', fontSize: '13px',
-              cursor: 'pointer', border: '1px solid',
-              background: difficulty === d ? '#1e293b' : '#f8fafc',
-              color:      difficulty === d ? '#fff'    : '#475569',
-              borderColor: difficulty === d ? '#1e293b' : '#e2e8f0',
-            }}>
-            {d || 'Any Difficulty'}
-          </button>
-        ))}
-
-        {/* Company */}
-        <select value={company} onChange={e => setCompany(e.target.value)}
-          style={{
-            padding: '6px 12px', borderRadius: '8px', fontSize: '13px',
-            border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer'
-          }}>
-          <option value="">All Companies</option>
-          {meta.companies.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-
-        {/* Clear filters */}
-        {hasFilters && (
-          <button onClick={clearFilters}
-            style={{
-              padding: '6px 14px', borderRadius: '20px', fontSize: '13px',
-              cursor: 'pointer', border: '1px solid #fca5a5',
-              background: '#fff', color: '#dc2626'
-            }}>
-            ✕ Clear
-          </button>
-        )}
-      </div>
-
-      {/* Problem List */}
-      {loading ? (
-        <p style={{ color: '#666', textAlign: 'center', padding: '40px' }}>Loading...</p>
-      ) : problems.length === 0 ? (
-        <p style={{ color: '#666', textAlign: 'center', padding: '40px' }}>No problems match your filters.</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {problems.map(p => (
-            <div key={p._id} style={{
-              display: 'flex', alignItems: 'center', gap: '12px',
-              padding: '14px 16px', borderRadius: '10px',
-              border: '1px solid #e2e8f0', background: '#fff',
-              flexWrap: 'wrap'
-            }}>
-                
-              {/* LeetCode number */}
-              <span style={{ fontSize: '13px', color: '#94a3b8', minWidth: '36px', fontFamily: 'monospace' }}>
-                #{p.leetcodeNum}
-              </span>
-                {animData[p._id] && (
-                    <div style={{ padding: '0 16px 16px' }}>
-                        <Visualizer data={animData[p._id]} />
-                    </div>
-                )}
-              {/* Title */}
-              <span style={{ fontWeight: 600, fontSize: '14px', flex: 1, minWidth: '160px' }}>
-                {p.title}
-              </span>
-
-              {/* Difficulty badge */}
-              <span style={{
-                fontSize: '12px', fontWeight: 600, padding: '3px 10px', borderRadius: '20px',
-                ...DIFF_COLOR[p.difficulty]
-              }}>
-                {p.difficulty}
-              </span>
-
-              {/* Topic tags */}
-              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                {p.topics.map(t => (
-                  <span key={t} style={{
-                    fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
-                    background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0'
-                  }}>
-                    {t}
-                  </span>
-                ))}
-              </div>
-
-              {/* Company dots */}
-              <div style={{ display: 'flex', gap: '4px' }}>
-                {p.companies.slice(0, 4).map(c => (
-                  <span key={c} title={c} style={{
-                    width: '22px', height: '22px', borderRadius: '50%',
-                    background: '#6366f1', color: '#fff',
-                    fontSize: '9px', fontWeight: 700,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    {c[0]}
-                  </span>
-                ))}
-              </div>
-
-              {/* Start with AI button */}
-              <button
-                onClick={() => navigate(`/chat?problemId=${p._id}`)}
-                style={{
-                  padding: '6px 14px', borderRadius: '6px', fontSize: '13px',
-                  background: '#6366f1', color: '#fff', border: 'none',
-                  cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap'
-                }}>
-                Start with AI →
-              </button>
-              <button
-                    onClick={() => animateProblem(p)}
-                    disabled={animating === p._id}
-                    style={{
-                        padding: '6px 14px', borderRadius: '6px', fontSize: '13px',
-                        background: animData[p._id] ? '#ede9fe' : '#f8fafc',
-                        color: animData[p._id] ? '#4f46e5' : '#475569',
-                        border: '1px solid #e2e8f0',
-                        cursor: animating === p._id ? 'wait' : 'pointer',
-                    }}>
-                    {animating === p._id ? '⚡...' : animData[p._id] ? '🎬 Hide' : '🎬 Animate'}
-                </button>
-            </div>
+    <PageLayout $wide>
+      <TwoColLayout>
+        {/* ── Collapsible Sidebar (fix #1) ── */}
+        <CollapsibleSidebar label={`Filters${activeFilterCount ? ` (${activeFilterCount})` : ''}`}>
+          <SectionLabel>Topics</SectionLabel>
+          <FilterBtn $active={!topic} onClick={() => setParam('topic', '')}>
+            All <FilterCount>{total}</FilterCount>
+          </FilterBtn>
+          {meta.topics.map(t => (
+            <FilterBtn key={t} $active={topic === t} onClick={() => setParam('topic', t)}>{t}</FilterBtn>
           ))}
-        </div>
-      )}
-    </div>
+
+          <SectionLabel style={{ marginTop: 16 }}>Difficulty</SectionLabel>
+          {['', 'Easy', 'Medium', 'Hard'].map(d => (
+            <FilterBtn key={d || 'all'} $active={difficulty === d} onClick={() => setParam('difficulty', d)}>
+              {d || 'Any'}
+            </FilterBtn>
+          ))}
+
+          <SectionLabel style={{ marginTop: 16 }}>Company</SectionLabel>
+          <FilterBtn $active={!company} onClick={() => setParam('company', '')}>Any</FilterBtn>
+          {meta.companies.slice(0, 10).map(c => (
+            <FilterBtn key={c} $active={company === c} onClick={() => setParam('company', c)}>{c}</FilterBtn>
+          ))}
+        </CollapsibleSidebar>
+
+        {/* ── Content ── */}
+        <MainContent>
+          <PageTitle initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
+            DSA Problems
+          </PageTitle>
+          <PageSubtitle>{problems.length} problems · {solvedCount} solved</PageSubtitle>
+
+          <Input
+            placeholder="Search problems…"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+          />
+
+          {!loading && (
+            <ProgressBar>
+              <ProgressFill
+                initial={{ width: 0 }}
+                animate={{ width: `${total > 0 ? (solvedCount / total) * 100 : 0}%` }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+              />
+            </ProgressBar>
+          )}
+
+          {loading ? <SkeletonLoader count={8} /> : (
+            <>
+              {visibleProblems.map((p, i) => (
+                <ProblemRow
+                  key={p._id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i * 0.02, 0.3) }}
+                >
+                  <ProblemHeader onClick={() => setExpanded(e => e === p._id ? null : p._id)}>
+                    <ProblemNum>#{p.leetcodeNum}</ProblemNum>
+                    <ProblemTitle>{p.title}</ProblemTitle>
+                    {solvedIds.includes(p._id) && <SolvedMark title="Solved">✓</SolvedMark>}
+                    <DiffBadge difficulty={p.difficulty} />
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 4 }}>
+                      {expanded === p._id ? '▲' : '▼'}
+                    </span>
+                  </ProblemHeader>
+
+                  <AnimatePresence>
+                    {expanded === p._id && (
+                      <ExpandBody
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22 }}
+                      >
+                        <div style={{ paddingTop: 14 }}>
+                          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.65, marginBottom: 10 }}>
+                            {p.description}
+                          </p>
+                          {p.examples?.[0] && <ExampleBox>{p.examples[0]}</ExampleBox>}
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 12 }}>
+                            {p.topics?.map(t => <TopicTag key={t}>{t}</TopicTag>)}
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <Btn $variant="primary" onClick={() => navigate(`/chat?problemId=${p._id}`)}>
+                              🤖 Start with AI
+                            </Btn>
+                            <Btn onClick={() => animateProblem(p)} disabled={animating === p._id}>
+                              {animating === p._id ? '⚡ Generating…' : animData[p._id] ? '✕ Hide' : '🎬 Animate'}
+                            </Btn>
+                          </div>
+                          {animData[p._id] && (
+                            <div style={{ marginTop: 16 }}>
+                              <Visualizer data={animData[p._id]} />
+                            </div>
+                          )}
+                        </div>
+                      </ExpandBody>
+                    )}
+                  </AnimatePresence>
+                </ProblemRow>
+              ))}
+
+              {visible < problems.length && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginTop: 20 }}>
+                  <Btn onClick={() => setVisible(v => v + 20)}>
+                    Show more ({problems.length - visible} remaining) ↓
+                  </Btn>
+                </div>
+              )}
+
+              {problems.length === 0 && (
+                <EmptyBox>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>🔍</div>
+                  No problems match your filters.
+                </EmptyBox>
+              )}
+            </>
+          )}
+        </MainContent>
+      </TwoColLayout>
+    </PageLayout>
   );
 }

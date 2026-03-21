@@ -1,199 +1,211 @@
+// client/src/pages/Tech.jsx
+// Fix: uses CollapsibleSidebar for mobile expand/collapse
+// Fix: ExplainModal now constrained via fixed component (no more horizontal scroll)
 import { useState, useEffect } from 'react';
-import axios from 'axios';
-import ExplainModal from '../components/ExplainModal';
+import styled from 'styled-components';
+import { motion, AnimatePresence } from 'framer-motion';
+import ExplainModal from '../components/ExplainModal.jsx';
+import SkeletonLoader from '../components/SkeletonLoader.jsx';
+import { apiFetch } from '../lib/api.js';
+import {
+  PageLayout, TwoColLayout, CollapsibleSidebar, MainContent,
+  PageTitle, PageSubtitle, SectionLabel,
+  Btn, DiffBadge, AIBadge, FilterBtn, FilterCount,
+  EmptyBox, Input,
+} from '../components/ui.jsx';
 
-const API = 'http://localhost:5000';
+/* ── Local styled components ─────────────────────────────── */
+const QuestionCard = styled(motion.div)`
+  background: ${({ $reviewed, theme }) => $reviewed ? theme.colors.greenBg : theme.colors.bgSurface};
+  border: 1px solid ${({ $reviewed, theme }) => $reviewed ? theme.colors.greenBorder : theme.colors.border};
+  border-radius: ${({ theme }) => theme.radius.md};
+  padding: 16px;
+  margin-bottom: 10px;
+  transition: border-color 0.15s;
+  &:hover { border-color: ${({ theme }) => theme.colors.accentBorder}; }
+`;
 
-const DIFF_COLOR = {
-  Easy:   { bg: '#dcfce7', color: '#16a34a' },
-  Medium: { bg: '#fef9c3', color: '#ca8a04' },
-  Hard:   { bg: '#fee2e2', color: '#dc2626' },
-};
+const TagChip = styled.span`
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: ${({ theme }) => theme.colors.bgHover};
+  color: ${({ theme }) => theme.colors.textMuted};
+`;
 
 export default function Tech() {
-  const [questions,   setQuestions]   = useState([]);
-  const [categories,  setCategories]  = useState([]);
+  const [questions,      setQuestions]      = useState([]);
+  const [categories,     setCategories]     = useState([]);
   const [activeCategory, setActiveCategory] = useState('');
-  const [difficulty,  setDifficulty]  = useState('');
-  const [loading,     setLoading]     = useState(true);
-  const [reviewed,    setReviewed]    = useState({}); // { questionId: true }
-  const [modal,       setModal]       = useState(null); // { question, category }
+  const [difficulty,     setDifficulty]     = useState('');
+  const [search,         setSearch]         = useState('');
+  const [loading,        setLoading]        = useState(true);
+  const [visible,        setVisible]        = useState(15);
+  const [reviewed,       setReviewed]       = useState(() => {
+    try { return JSON.parse(localStorage.getItem('reviewed') || '{}'); } catch { return {}; }
+  });
+  const [modal,      setModal]      = useState(null);
+  const [generating, setGenerating] = useState(false);
 
-  // Fetch categories with counts once
+  useEffect(() => { setVisible(15); }, [activeCategory, difficulty, search]);
+
   useEffect(() => {
-    axios.get(`${API}/api/tech/categories`)
-      .then(r => setCategories(r.data))
-      .catch(console.error);
+    apiFetch('/api/tech/categories').then(setCategories).catch(console.error);
   }, []);
 
-  // Fetch questions when filters change
   useEffect(() => {
     setLoading(true);
-    const params = {};
-    if (activeCategory) params.category   = activeCategory;
-    if (difficulty)     params.difficulty = difficulty;
-
-    axios.get(`${API}/api/tech`, { params })
-      .then(r => { setQuestions(r.data); setLoading(false); })
-      .catch(err => { console.error(err); setLoading(false); });
+    const qs = new URLSearchParams();
+    if (activeCategory) qs.set('category', activeCategory);
+    if (difficulty)     qs.set('difficulty', difficulty);
+    apiFetch(`/api/tech?${qs}`)
+      .then(setQuestions)
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, [activeCategory, difficulty]);
 
+  const filtered = questions.filter(q =>
+    !search || q.question.toLowerCase().includes(search.toLowerCase())
+  );
+  const visibleFiltered = filtered.slice(0, visible);
+
   const toggleReviewed = (id) => {
-    setReviewed(prev => ({ ...prev, [id]: !prev[id] }));
+    const next = { ...reviewed, [id]: !reviewed[id] };
+    setReviewed(next);
+    localStorage.setItem('reviewed', JSON.stringify(next));
   };
 
+  const generateQuestion = async () => {
+    if (!activeCategory) return;
+    setGenerating(true);
+    try {
+      const q = await apiFetch('/api/tech/generate', {
+        method: 'POST',
+        body: JSON.stringify({ category: activeCategory }),
+      });
+      setQuestions(prev => [q, ...prev]);
+    } catch (err) { alert(err.message); }
+    finally { setGenerating(false); }
+  };
+
+  const activeFilterCount = [activeCategory, difficulty].filter(Boolean).length;
+
   return (
-    <div style={{ display: 'flex', maxWidth: '1000px', margin: '0 auto', padding: '24px 16px', gap: '20px' }}>
+    <PageLayout $wide>
+      <TwoColLayout>
+        {/* ── Collapsible Sidebar (fix #1) ── */}
+        <CollapsibleSidebar label={`Filters${activeFilterCount ? ` (${activeFilterCount})` : ''}`}>
+          <SectionLabel>Categories</SectionLabel>
+          <FilterBtn $active={!activeCategory} onClick={() => setActiveCategory('')}>
+            All Questions
+          </FilterBtn>
+          {categories.map(cat => (
+            <FilterBtn key={cat._id} $active={activeCategory === cat._id} onClick={() => setActiveCategory(cat._id)}>
+              <span>{cat._id}</span>
+              <FilterCount>{cat.count}</FilterCount>
+            </FilterBtn>
+          ))}
 
-      {/* Sidebar */}
-      <div style={{ width: '200px', flexShrink: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: '13px', color: '#94a3b8',
-          letterSpacing: '1px', marginBottom: '10px' }}>
-          CATEGORIES
-        </div>
+          <SectionLabel style={{ marginTop: 16 }}>Difficulty</SectionLabel>
+          {['', 'Easy', 'Medium', 'Hard'].map(d => (
+            <FilterBtn key={d || 'all'} $active={difficulty === d} onClick={() => setDifficulty(d)}>
+              {d || 'Any'}
+            </FilterBtn>
+          ))}
+        </CollapsibleSidebar>
 
-        {/* All */}
-        <button onClick={() => setActiveCategory('')}
-          style={{
-            width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: '8px',
-            border: 'none', cursor: 'pointer', fontSize: '14px', marginBottom: '2px',
-            background: activeCategory === '' ? '#6366f1' : 'transparent',
-            color:      activeCategory === '' ? '#fff'    : '#334155',
-            fontWeight: activeCategory === '' ? 600 : 400,
-          }}>
-          All Questions
-        </button>
+        {/* ── Content ── */}
+        <MainContent>
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
+            <PageTitle>Tech Questions</PageTitle>
+            <PageSubtitle>
+              {filtered.length} questions
+              {activeCategory ? ` · ${activeCategory}` : ''}
+              {difficulty ? ` · ${difficulty}` : ''}
+            </PageSubtitle>
+          </motion.div>
 
-        {categories.map(cat => (
-          <button key={cat._id} onClick={() => setActiveCategory(cat._id)}
-            style={{
-              width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: '8px',
-              border: 'none', cursor: 'pointer', fontSize: '14px', marginBottom: '2px',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              background: activeCategory === cat._id ? '#6366f1' : 'transparent',
-              color:      activeCategory === cat._id ? '#fff'    : '#334155',
-              fontWeight: activeCategory === cat._id ? 600 : 400,
-            }}>
-            <span>{cat._id}</span>
-            <span style={{
-              fontSize: '11px',
-              background: activeCategory === cat._id ? 'rgba(255,255,255,0.25)' : '#f1f5f9',
-              color: activeCategory === cat._id ? '#fff' : '#64748b',
-              padding: '1px 7px', borderRadius: '20px'
-            }}>
-              {cat.count}
-            </span>
-          </button>
-        ))}
-
-        {/* Difficulty filter */}
-        <div style={{ marginTop: '20px', fontWeight: 700, fontSize: '13px',
-          color: '#94a3b8', letterSpacing: '1px', marginBottom: '10px' }}>
-          DIFFICULTY
-        </div>
-        {['', 'Easy', 'Medium', 'Hard'].map(d => (
-          <button key={d || 'all'} onClick={() => setDifficulty(d)}
-            style={{
-              width: '100%', textAlign: 'left', padding: '8px 12px', borderRadius: '8px',
-              border: 'none', cursor: 'pointer', fontSize: '14px', marginBottom: '2px',
-              background: difficulty === d ? '#1e293b' : 'transparent',
-              color:      difficulty === d ? '#fff'    : '#334155',
-            }}>
-            {d || 'Any'}
-          </button>
-        ))}
-      </div>
-
-      {/* Main content */}
-      <div style={{ flex: 1 }}>
-        <div style={{ marginBottom: '16px' }}>
-          <h1 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '4px' }}>
-            Tech Questions
-          </h1>
-          <p style={{ color: '#666', fontSize: '14px' }}>
-            {questions.length} questions
-            {activeCategory ? ` · ${activeCategory}` : ''}
-            {difficulty ? ` · ${difficulty}` : ''}
-          </p>
-        </div>
-
-        {loading ? (
-          <p style={{ color: '#666', textAlign: 'center', padding: '40px' }}>Loading...</p>
-        ) : questions.length === 0 ? (
-          <p style={{ color: '#666', textAlign: 'center', padding: '40px' }}>No questions found.</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {questions.map(q => (
-              <div key={q._id} style={{
-                padding: '16px 18px', borderRadius: '10px',
-                border: `1px solid ${reviewed[q._id] ? '#bbf7d0' : '#e2e8f0'}`,
-                background: reviewed[q._id] ? '#f0fdf4' : '#fff',
-                transition: 'all 0.2s'
-              }}>
-                {/* Top row */}
-                <div style={{ display: 'flex', justifyContent: 'space-between',
-                  alignItems: 'flex-start', gap: '10px', marginBottom: '10px' }}>
-                  <p style={{ fontSize: '14px', fontWeight: 500, color: '#1e293b',
-                    lineHeight: 1.5, margin: 0, flex: 1 }}>
-                    {q.question}
-                  </p>
-                  <span style={{
-                    fontSize: '11px', fontWeight: 600, padding: '3px 10px',
-                    borderRadius: '20px', flexShrink: 0, ...DIFF_COLOR[q.difficulty]
-                  }}>
-                    {q.difficulty}
-                  </span>
-                </div>
-
-                {/* Tags */}
-                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                  {q.tags?.map(tag => (
-                    <span key={tag} style={{
-                      fontSize: '11px', padding: '2px 8px', borderRadius: '4px',
-                      background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0'
-                    }}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-
-                {/* Actions */}
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    onClick={() => setModal({ question: q.question, category: q.category })}
-                    style={{
-                      padding: '7px 16px', borderRadius: '7px', fontSize: '13px',
-                      background: '#6366f1', color: '#fff', border: 'none',
-                      cursor: 'pointer', fontWeight: 600
-                    }}>
-                    ✨ Get AI Explanation
-                  </button>
-
-                  <button onClick={() => toggleReviewed(q._id)}
-                    style={{
-                      padding: '7px 16px', borderRadius: '7px', fontSize: '13px',
-                      background: reviewed[q._id] ? '#dcfce7' : '#f8fafc',
-                      color:      reviewed[q._id] ? '#16a34a' : '#64748b',
-                      border: `1px solid ${reviewed[q._id] ? '#bbf7d0' : '#e2e8f0'}`,
-                      cursor: 'pointer'
-                    }}>
-                    {reviewed[q._id] ? '✓ Reviewed' : 'Mark Reviewed'}
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <Input
+              placeholder="Search questions…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ marginBottom: 0 }}
+            />
+            {activeCategory && (
+              <Btn $variant="primary" onClick={generateQuestion} disabled={generating} style={{ flexShrink: 0 }}>
+                {generating ? '⚡…' : '+ AI Generate'}
+              </Btn>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* AI Explanation Modal */}
-      {modal && (
-        <ExplainModal
-          question={modal.question}
-          category={modal.category}
-          onClose={() => setModal(null)}
-        />
-      )}
-    </div>
+          {loading ? (
+            <SkeletonLoader count={5} />
+          ) : filtered.length === 0 ? (
+            <EmptyBox>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>🎯</div>
+              No questions found.
+            </EmptyBox>
+          ) : (
+            <>
+              {visibleFiltered.map((q, i) => (
+                <QuestionCard
+                  key={q._id}
+                  $reviewed={reviewed[q._id]}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i * 0.03, 0.3) }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+                    <p style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.55, flex: 1, color: 'var(--text-primary)' }}>
+                      {q.question}
+                    </p>
+                    <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                      {q.isCustom && <AIBadge>AI</AIBadge>}
+                      <DiffBadge difficulty={q.difficulty} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 12 }}>
+                    {q.tags?.map(tag => <TagChip key={tag}>{tag}</TagChip>)}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Btn $variant="primary" onClick={() => setModal({ question: q.question, category: q.category })}>
+                      ✨ AI Explanation
+                    </Btn>
+                    <Btn
+                      $variant={reviewed[q._id] ? 'success' : 'secondary'}
+                      onClick={() => toggleReviewed(q._id)}
+                    >
+                      {reviewed[q._id] ? '✓ Reviewed' : 'Mark Reviewed'}
+                    </Btn>
+                  </div>
+                </QuestionCard>
+              ))}
+
+              {visible < filtered.length && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                  <Btn onClick={() => setVisible(v => v + 15)}>
+                    Load {Math.min(15, filtered.length - visible)} more ↓
+                  </Btn>
+                </div>
+              )}
+            </>
+          )}
+        </MainContent>
+      </TwoColLayout>
+
+      {/* Fix #2: ExplainModal is now constrained to 95vw max, no horizontal scroll */}
+      <AnimatePresence>
+        {modal && (
+          <ExplainModal
+            question={modal.question}
+            category={modal.category}
+            onClose={() => setModal(null)}
+          />
+        )}
+      </AnimatePresence>
+    </PageLayout>
   );
 }

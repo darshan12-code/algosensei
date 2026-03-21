@@ -1,101 +1,98 @@
-const express = require('express');
-const axios = require('axios');
+// server/routes/quiz.js
+// Fix #8: uses shared groqJSON() helper.
+
+import express from 'express';
+import verifyToken from '../middleware/auth.js';
+import rateLimit from '../lib/rateLimiter.js';
+import QuizResult from '../models/QuizResult.js';
+import WeakTopic from '../models/WeakTopic.js';
+import handleAxiosError from '../lib/handleAxiosError.js';
+import { requireFields } from '../lib/validate.js';
+import { groqJSON } from '../lib/groq.js';
+
 const router = express.Router();
-const verifyToken = require('../middleware/auth');
-const QuizResult = require('../models/QuizResult');
-const handleAxiosError = require('../lib/handleAxiosError');
 
-const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const QUIZ_SYSTEM = 'You are a technical interview quiz generator. Always respond with valid JSON only.';
 
-const QUIZ_PROMPT = (topic, type) => `Generate exactly 5 multiple choice quiz questions about: "${topic}" (type: ${type} interview prep).
-
-Return ONLY valid JSON with this exact structure:
+const quizPrompt = (topic, type) =>
+  `Generate exactly 5 multiple choice quiz questions about: "${topic}" (type: ${type} interview prep).
+Return ONLY valid JSON:
 {
   "topic": "${topic}",
   "questions": [
     {
-      "question": "What is the time complexity of HashMap lookup?",
-      "options": ["O(1) average", "O(n)", "O(log n)", "O(n²)"],
+      "question": "the question text",
+      "options": ["option A", "option B", "option C", "option D"],
       "correct": 0,
-      "explanation": "Hash maps provide O(1) average-case lookup because the hash function maps directly to a bucket index. Worst case is O(n) due to collisions but rare with a good hash function."
+      "explanation": "2-3 sentence explanation"
     }
   ]
 }
+Rules: 5 questions, 4 options each, correct is 0-based index, interview-level difficulty, mix of types.`;
 
-Rules:
-- Exactly 5 questions
-- Each question has exactly 4 options (strings, not "A)" prefixed)
-- correct is the 0-based index of the correct option (0, 1, 2, or 3)
-- explanation is 2-3 sentences explaining why the correct answer is right
-- Questions must be genuinely challenging, interview-level difficulty
-- No duplicate questions`;
-
-// POST /api/quiz/generate
-router.post('/generate', verifyToken, async (req, res) => {
+router.post('/generate', verifyToken, rateLimit, async (req, res) => {
   const { topic, type = 'dsa' } = req.body;
-  if (!topic) return res.status(400).json({ error: 'topic is required' });
+
+  const err = requireFields(['topic'], req.body);
+  if (err) return res.status(400).json({ error: err });
 
   try {
-    const response = await axios.post(
-      GROQ_URL,
-      {
-        model: GROQ_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a technical interview quiz generator. Always respond with valid JSON only. No markdown, no backticks, no explanation outside the JSON.'
-          },
-          { role: 'user', content: QUIZ_PROMPT(topic, type) }
-        ],
-        response_format: { type: 'json_object' },
-        max_tokens: 2000,
-      },
-      { headers: { Authorization: `Bearer ${process.env.GROQ_KEY}` } }
+    const data = await groqJSON(
+      [
+        { role: 'system', content: QUIZ_SYSTEM },
+        { role: 'user',   content: quizPrompt(topic, type) },
+      ],
+      { max_tokens: 2000 },
     );
 
-    const raw = response.data.choices[0].message.content;
-    const cleaned = raw.replace(/```json|```/g, '').trim();
-    const data = JSON.parse(cleaned);
-
-    // Validate structure
-    if (!data.questions || !Array.isArray(data.questions) || data.questions.length === 0) {
+    if (!Array.isArray(data.questions) || data.questions.length === 0) {
       throw new Error('Invalid quiz structure returned');
     }
 
-    // Ensure correct is always a number index
+    // Normalise correct index — model sometimes returns a string
     data.questions = data.questions.map(q => ({
       ...q,
-      correct: typeof q.correct === 'string'
-        ? parseInt(q.correct) || 0
-        : q.correct
+      correct: typeof q.correct === 'string' ? (parseInt(q.correct) || 0) : q.correct,
     }));
 
     res.json(data);
   } catch (err) {
-     if (err.response) return handleAxiosError(err, res);
-        res.status(500).json({ error: err.message });
-    // console.error('Quiz generate error:', err.response?.data || err.message);
-    // res.status(500).json({ error: 'Quiz generation failed', details: err.message });
+    if (err.response) return handleAxiosError(err, res);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/quiz/result — save completed quiz
-router.post('/result', verifyToken, async (req, res) => {
+router.post('/complete', verifyToken, async (req, res) => {
   try {
-    const { topic, score, questions } = req.body;
+    const { topic, type = 'dsa', score, questions, answers } = req.body;
+
+    const valErr = requireFields(['topic', 'score', 'questions'], req.body);
+    if (valErr) return res.status(400).json({ error: valErr });
+
     const result = await QuizResult.create({
-      userId:    req.user._id,
-      topic,
-      score,
-      questions,
+      userId: req.user._id,
+      topic, type, score, questions,
       answeredAt: new Date(),
     });
+
+    if (Array.isArray(answers) && answers.length > 0) {
+      const bulkOps = answers.map(a => ({
+        updateOne: {
+          filter: { userId: req.user._id, topic, type },
+          update: {
+            $inc: { attemptCount: 1, ...(a.correct ? {} : { failCount: 1 }) },
+            $set: { lastAttempted: new Date() },
+          },
+          upsert: true,
+        },
+      }));
+      await WeakTopic.bulkWrite(bulkOps);
+    }
+
     res.json(result);
   } catch (err) {
-     if (err.response) return handleAxiosError(err, res);
-        res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-module.exports = router;
+export default router;

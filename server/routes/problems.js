@@ -1,39 +1,57 @@
-const express = require('express');
-const router = express.Router();
-const DSAProblem = require('../models/DSAProblem');
-const verifyToken = require('../middleware/auth');
+import express from 'express';
+import DSAProblem from '../models/DSAProblem.js';
+import Session from '../models/Session.js';
+import verifyToken from '../middleware/auth.js';
+import cache from '../lib/cache.js';
 
-// GET /api/problems — dynamic filters
+const router = express.Router();
+
 router.get('/', async (req, res) => {
   try {
-    const { topic, difficulty, company, search } = req.query;
-
-    // Only add filter fields that actually exist in the query
+    const { topic, difficulty, company, search, page = 1, limit = 50 } = req.query;
     const q = {};
     if (topic)      q.topics     = { $in: [topic] };
     if (difficulty) q.difficulty = difficulty;
     if (company)    q.companies  = { $in: [company] };
     if (search)     q.title      = { $regex: search, $options: 'i' };
 
-    const problems = await DSAProblem.find(q).sort({ leetcodeNum: 1 });
-    res.json(problems);
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [problems, total] = await Promise.all([
+      DSAProblem.find(q).sort({ leetcodeNum: 1 }).skip(skip).limit(parseInt(limit)),
+      DSAProblem.countDocuments(q),
+    ]);
+    res.json({ problems, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET /api/problems/meta — all unique topics + companies for filter dropdowns
 router.get('/meta', async (req, res) => {
   try {
-    const topics    = await DSAProblem.distinct('topics');
-    const companies = await DSAProblem.distinct('companies');
-    res.json({ topics: topics.sort(), companies: companies.sort() });
+    const cached = cache.get('problems_meta');
+    if (cached) return res.json(cached);
+    const [topics, companies] = await Promise.all([
+      DSAProblem.distinct('topics'),
+      DSAProblem.distinct('companies'),
+    ]);
+    const data = { topics: topics.sort(), companies: companies.sort() };
+    cache.set('problems_meta', data);
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET /api/problems/:id — single problem detail
+router.get('/solved', verifyToken, async (req, res) => {
+  try {
+    const sessions = await Session.find({ userId: req.user._id, solved: true }).select('problemId');
+    const solvedIds = [...new Set(sessions.map(s => s.problemId?.toString()).filter(Boolean))];
+    res.json(solvedIds);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const problem = await DSAProblem.findById(req.params.id);
@@ -44,4 +62,4 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

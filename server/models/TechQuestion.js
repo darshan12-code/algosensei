@@ -1,13 +1,13 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const TechQuestionSchema = new mongoose.Schema({
-  category:    { type: String, required: true },  // JavaScript, System Design, etc.
+  category:    { type: String, required: true },
   subcategory: String,
   question:    { type: String, required: true },
   answer:      String,
   difficulty:  { type: String, enum: ['Easy', 'Medium', 'Hard'] },
   tags:        [String],
-  isCustom:    { type: Boolean, default: false }
+  isCustom:   { type: Boolean, default: false },
 });
 
-module.exports = mongoose.model('TechQuestion', TechQuestionSchema);
+export default mongoose.model('TechQuestion', TechQuestionSchema);

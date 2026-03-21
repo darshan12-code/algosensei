@@ -1,328 +1,201 @@
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
-const dns = require('dns');
-dns.setServers(['8.8.8.8', '8.8.4.4']); // force Google DNS
-const mongoose = require('mongoose');
-const DSAProblem = require('../models/DSAProblem');
+// server/scripts/seedDSA.js
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import dns from 'dns';
+
+const require = createRequire(import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Load .env from server root
+const dotenv = require('dotenv');
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+
+import mongoose from 'mongoose';
+import DSAProblem from '../models/DSAProblem.js';
 
 const problems = [
-  // ── ARRAY (5) ──────────────────────────────────────────────
-  {
-    leetcodeNum: 1, title: 'Two Sum', difficulty: 'Easy',
-    topics: ['Array', 'HashMap'], companies: ['Google', 'Amazon', 'Meta', 'Apple'],
-    description: 'Given an integer array nums and a target, return indices of the two numbers that add up to target.',
-    examples: ['Input: nums=[2,7,11,15], target=9 → Output: [0,1]'],
-    constraints: ['2 <= nums.length <= 10^4', 'Exactly one valid answer exists']
-  },
-  {
-    leetcodeNum: 121, title: 'Best Time to Buy and Sell Stock', difficulty: 'Easy',
-    topics: ['Array'], companies: ['Amazon', 'Google', 'Microsoft'],
-    description: 'Find the maximum profit by choosing a day to buy and a later day to sell.',
-    examples: ['Input: prices=[7,1,5,3,6,4] → Output: 5'],
-    constraints: ['1 <= prices.length <= 10^5', '0 <= prices[i] <= 10^4']
-  },
-  {
-    leetcodeNum: 15, title: '3Sum', difficulty: 'Medium',
-    topics: ['Array', 'Two Pointers'], companies: ['Google', 'Meta', 'Amazon'],
-    description: 'Find all unique triplets in the array that sum to zero.',
-    examples: ['Input: nums=[-1,0,1,2,-1,-4] → Output: [[-1,-1,2],[-1,0,1]]'],
-    constraints: ['3 <= nums.length <= 3000', '-10^5 <= nums[i] <= 10^5']
-  },
-  {
-    leetcodeNum: 11, title: 'Container With Most Water', difficulty: 'Medium',
-    topics: ['Array', 'Two Pointers'], companies: ['Google', 'Amazon', 'Bloomberg'],
-    description: 'Find two lines that together with the x-axis form a container holding the most water.',
-    examples: ['Input: height=[1,8,6,2,5,4,8,3,7] → Output: 49'],
-    constraints: ['n == height.length', '2 <= n <= 10^5']
-  },
-  {
-    leetcodeNum: 42, title: 'Trapping Rain Water', difficulty: 'Hard',
-    topics: ['Array', 'Two Pointers'], companies: ['Google', 'Amazon', 'Meta'],
-    description: 'Given n non-negative integers representing an elevation map, compute how much water it can trap.',
-    examples: ['Input: height=[0,1,0,2,1,0,1,3,2,1,2,1] → Output: 6'],
-    constraints: ['n == height.length', '1 <= n <= 2 * 10^4']
-  },
+  // ── Arrays & Hashing ─────────────────────────────────
+  { leetcodeNum: 1,   title: 'Two Sum', difficulty: 'Easy', topics: ['Array','HashMap'], companies: ['Google','Amazon','Meta','Apple'], description: 'Return indices of two numbers that add to target.', examples: ['nums=[2,7,11,15], target=9 → [0,1]'], constraints: ['2 <= n <= 10^4'] },
+  { leetcodeNum: 49,  title: 'Group Anagrams', difficulty: 'Medium', topics: ['HashMap','String'], companies: ['Amazon','Google','Facebook'], description: 'Group strings that are anagrams of each other.', examples: ['["eat","tea","tan","ate","nat","bat"] → [["bat"],["nat","tan"],["ate","eat","tea"]]'], constraints: ['1 <= n <= 10^4'] },
+  { leetcodeNum: 128, title: 'Longest Consecutive Sequence', difficulty: 'Medium', topics: ['HashMap','Array'], companies: ['Google','Amazon','Facebook'], description: 'Find length of longest consecutive sequence in O(n).', examples: ['[100,4,200,1,3,2] → 4'], constraints: ['0 <= n <= 10^5'] },
+  { leetcodeNum: 347, title: 'Top K Frequent Elements', difficulty: 'Medium', topics: ['HashMap','Heap'], companies: ['Amazon','Google','Facebook'], description: 'Return the k most frequent elements.', examples: ['[1,1,1,2,2,3], k=2 → [1,2]'], constraints: ['1 <= n <= 10^5'] },
+  { leetcodeNum: 238, title: 'Product of Array Except Self', difficulty: 'Medium', topics: ['Array'], companies: ['Amazon','Apple','Microsoft'], description: 'Return array where each element is product of all others. No division.', examples: ['[1,2,3,4] → [24,12,8,6]'], constraints: ['2 <= n <= 10^5'] },
+  { leetcodeNum: 271, title: 'Encode and Decode Strings', difficulty: 'Medium', topics: ['Array','String'], companies: ['Google','Amazon'], description: 'Design an algorithm to encode/decode a list of strings.', examples: ['["lint","code","love","you"] → "lint#code#love#you" → ["lint","code","love","you"]'], constraints: ['0 <= s.length <= 200'] },
+  { leetcodeNum: 36,  title: 'Valid Sudoku', difficulty: 'Medium', topics: ['Array','HashMap'], companies: ['Amazon','Apple'], description: 'Determine if a 9x9 Sudoku board is valid.', examples: ['board with valid placement → true'], constraints: ['board is always 9x9'] },
+  { leetcodeNum: 659, title: 'Contains Duplicate', difficulty: 'Easy', topics: ['Array','HashMap'], companies: ['Google','Amazon'], description: 'Return true if any value appears at least twice.', examples: ['[1,2,3,1] → true'], constraints: ['1 <= n <= 10^5'] },
+  { leetcodeNum: 217, title: 'Contains Duplicate', difficulty: 'Easy', topics: ['Array','HashSet'], companies: ['Apple','Adobe'], description: 'Return true if any value appears at least twice in the array.', examples: ['[1,2,3,1] → true', '[1,2,3,4] → false'], constraints: ['1 <= nums.length <= 10^5'] },
+  { leetcodeNum: 242, title: 'Valid Anagram', difficulty: 'Easy', topics: ['String','HashMap'], companies: ['Amazon','Google'], description: 'Given two strings s and t, return true if t is an anagram of s.', examples: ['"anagram","nagaram" → true'], constraints: ['1 <= s.length, t.length <= 5*10^4'] },
 
-  // ── HASHMAP (5) ─────────────────────────────────────────────
-  {
-    leetcodeNum: 49, title: 'Group Anagrams', difficulty: 'Medium',
-    topics: ['HashMap', 'String'], companies: ['Amazon', 'Google', 'Facebook'],
-    description: 'Group strings that are anagrams of each other.',
-    examples: ['Input: ["eat","tea","tan","ate","nat","bat"] → Output: [["bat"],["nat","tan"],["ate","eat","tea"]]'],
-    constraints: ['1 <= strs.length <= 10^4', 'strs[i] consists of lowercase English letters']
-  },
-  {
-    leetcodeNum: 128, title: 'Longest Consecutive Sequence', difficulty: 'Medium',
-    topics: ['HashMap', 'Array'], companies: ['Google', 'Amazon', 'Facebook'],
-    description: 'Find the length of the longest consecutive elements sequence in O(n).',
-    examples: ['Input: nums=[100,4,200,1,3,2] → Output: 4'],
-    constraints: ['0 <= nums.length <= 10^5', '-10^9 <= nums[i] <= 10^9']
-  },
-  {
-    leetcodeNum: 347, title: 'Top K Frequent Elements', difficulty: 'Medium',
-    topics: ['HashMap', 'Heap'], companies: ['Amazon', 'Google', 'Facebook'],
-    description: 'Return the k most frequent elements.',
-    examples: ['Input: nums=[1,1,1,2,2,3], k=2 → Output: [1,2]'],
-    constraints: ['1 <= nums.length <= 10^5', 'k is in range [1, unique elements]']
-  },
-  {
-    leetcodeNum: 560, title: 'Subarray Sum Equals K', difficulty: 'Medium',
-    topics: ['HashMap', 'Array'], companies: ['Facebook', 'Google', 'Amazon'],
-    description: 'Find total number of subarrays whose sum equals k.',
-    examples: ['Input: nums=[1,1,1], k=2 → Output: 2'],
-    constraints: ['1 <= nums.length <= 2 * 10^4', '-1000 <= nums[i] <= 1000']
-  },
-  {
-    leetcodeNum: 238, title: 'Product of Array Except Self', difficulty: 'Medium',
-    topics: ['HashMap', 'Array'], companies: ['Amazon', 'Apple', 'Microsoft'],
-    description: 'Return array where each element is product of all other elements. No division allowed.',
-    examples: ['Input: nums=[1,2,3,4] → Output: [24,12,8,6]'],
-    constraints: ['2 <= nums.length <= 10^5', 'Product fits in 32-bit integer']
-  },
+  // ── Two Pointers ──────────────────────────────────────
+  { leetcodeNum: 125, title: 'Valid Palindrome', difficulty: 'Easy', topics: ['Two Pointers','String'], companies: ['Facebook','Microsoft'], description: 'A phrase is a palindrome if it reads the same forward/backward ignoring case and non-alphanumerics.', examples: ['"A man, a plan, a canal: Panama" → true'], constraints: ['1 <= s.length <= 2*10^5'] },
+  { leetcodeNum: 15,  title: '3Sum', difficulty: 'Medium', topics: ['Array','Two Pointers'], companies: ['Google','Meta','Amazon'], description: 'Find all unique triplets that sum to zero.', examples: ['[-1,0,1,2,-1,-4] → [[-1,-1,2],[-1,0,1]]'], constraints: ['3 <= n <= 3000'] },
+  { leetcodeNum: 11,  title: 'Container With Most Water', difficulty: 'Medium', topics: ['Array','Two Pointers'], companies: ['Google','Amazon','Bloomberg'], description: 'Find two lines forming a container with maximum water.', examples: ['[1,8,6,2,5,4,8,3,7] → 49'], constraints: ['2 <= n <= 10^5'] },
+  { leetcodeNum: 42,  title: 'Trapping Rain Water', difficulty: 'Hard', topics: ['Array','Two Pointers'], companies: ['Google','Amazon','Meta'], description: 'Compute how much water can be trapped between bars.', examples: ['[0,1,0,2,1,0,1,3,2,1,2,1] → 6'], constraints: ['1 <= n <= 2*10^4'] },
+  { leetcodeNum: 167, title: 'Two Sum II - Input Array Is Sorted', difficulty: 'Medium', topics: ['Array','Two Pointers'], companies: ['Amazon','Adobe'], description: 'Return indices (1-indexed) of two numbers summing to target in a sorted array.', examples: ['[2,7,11,15], target=9 → [1,2]'], constraints: ['2 <= n <= 3*10^4'] },
 
-  // ── TWO POINTERS (5) ────────────────────────────────────────
-  {
-    leetcodeNum: 125, title: 'Valid Palindrome', difficulty: 'Easy',
-    topics: ['Two Pointers', 'String'], companies: ['Facebook', 'Microsoft', 'Amazon'],
-    description: 'Check if a string is a palindrome considering only alphanumeric characters.',
-    examples: ['Input: s="A man, a plan, a canal: Panama" → Output: true'],
-    constraints: ['1 <= s.length <= 2 * 10^5']
-  },
-  {
-    leetcodeNum: 167, title: 'Two Sum II', difficulty: 'Medium',
-    topics: ['Two Pointers', 'Array'], companies: ['Amazon', 'Microsoft'],
-    description: 'Find two numbers in a sorted array that add to target.',
-    examples: ['Input: numbers=[2,7,11,15], target=9 → Output: [1,2]'],
-    constraints: ['2 <= numbers.length <= 3 * 10^4', 'Exactly one solution']
-  },
-  {
-    leetcodeNum: 16, title: '3Sum Closest', difficulty: 'Medium',
-    topics: ['Two Pointers', 'Array'], companies: ['Amazon', 'Google'],
-    description: 'Find three integers whose sum is closest to target.',
-    examples: ['Input: nums=[-1,2,1,-4], target=1 → Output: 2'],
-    constraints: ['3 <= nums.length <= 500', '-10^4 <= target <= 10^4']
-  },
-  {
-    leetcodeNum: 977, title: 'Squares of a Sorted Array', difficulty: 'Easy',
-    topics: ['Two Pointers', 'Array'], companies: ['Google', 'Amazon'],
-    description: 'Return sorted array of squares of each number.',
-    examples: ['Input: nums=[-4,-1,0,3,10] → Output: [0,1,9,16,100]'],
-    constraints: ['1 <= nums.length <= 10^4']
-  },
-  {
-    leetcodeNum: 75, title: 'Sort Colors', difficulty: 'Medium',
-    topics: ['Two Pointers', 'Array'], companies: ['Microsoft', 'Amazon', 'Apple'],
-    description: 'Sort an array of 0s, 1s, and 2s in-place (Dutch National Flag problem).',
-    examples: ['Input: nums=[2,0,2,1,1,0] → Output: [0,0,1,1,2,2]'],
-    constraints: ['1 <= nums.length <= 300', 'nums[i] is 0, 1, or 2']
-  },
+  // ── Sliding Window ────────────────────────────────────
+  { leetcodeNum: 121, title: 'Best Time to Buy and Sell Stock', difficulty: 'Easy', topics: ['Array','Sliding Window'], companies: ['Amazon','Google','Microsoft'], description: 'Find maximum profit from single buy/sell.', examples: ['[7,1,5,3,6,4] → 5'], constraints: ['1 <= n <= 10^5'] },
+  { leetcodeNum: 3,   title: 'Longest Substring Without Repeating Characters', difficulty: 'Medium', topics: ['Sliding Window','String','HashMap'], companies: ['Amazon','Google','Bloomberg'], description: 'Find length of longest substring without repeating characters.', examples: ['"abcabcbb" → 3'], constraints: ['0 <= s.length <= 5*10^4'] },
+  { leetcodeNum: 424, title: 'Longest Repeating Character Replacement', difficulty: 'Medium', topics: ['Sliding Window','String'], companies: ['Google','Amazon'], description: 'Replace up to k characters; find longest substring with all same letters.', examples: ['"ABAB", k=2 → 4'], constraints: ['1 <= s.length <= 10^5'] },
+  { leetcodeNum: 567, title: 'Permutation in String', difficulty: 'Medium', topics: ['Sliding Window','String','HashMap'], companies: ['Microsoft','Amazon'], description: 'Return true if s2 contains a permutation of s1.', examples: ['"ab","eidbaooo" → true'], constraints: ['1 <= s1, s2 <= 10^4'] },
+  { leetcodeNum: 76,  title: 'Minimum Window Substring', difficulty: 'Hard', topics: ['Sliding Window','String','HashMap'], companies: ['Facebook','Amazon','Google'], description: 'Find minimum window substring containing all characters of t.', examples: ['"ADOBECODEBANC","ABC" → "BANC"'], constraints: ['1 <= m,n <= 10^5'] },
+  { leetcodeNum: 239, title: 'Sliding Window Maximum', difficulty: 'Hard', topics: ['Sliding Window','Deque'], companies: ['Google','Amazon'], description: 'Return the maximum in each sliding window of size k.', examples: ['[1,3,-1,-3,5,3,6,7], k=3 → [3,3,5,5,6,7]'], constraints: ['1 <= n <= 10^5'] },
 
-  // ── SLIDING WINDOW (5) ──────────────────────────────────────
-  {
-    leetcodeNum: 3, title: 'Longest Substring Without Repeating Characters', difficulty: 'Medium',
-    topics: ['Sliding Window', 'String'], companies: ['Amazon', 'Google', 'Bloomberg', 'Facebook'],
-    description: 'Find the length of the longest substring without repeating characters.',
-    examples: ['Input: s="abcabcbb" → Output: 3'],
-    constraints: ['0 <= s.length <= 5 * 10^4']
-  },
-  {
-    leetcodeNum: 424, title: 'Longest Repeating Character Replacement', difficulty: 'Medium',
-    topics: ['Sliding Window', 'String'], companies: ['Google', 'Amazon'],
-    description: 'Replace at most k characters to get the longest substring with same letter.',
-    examples: ['Input: s="ABAB", k=2 → Output: 4'],
-    constraints: ['1 <= s.length <= 10^5', '0 <= k <= s.length']
-  },
-  {
-    leetcodeNum: 567, title: 'Permutation in String', difficulty: 'Medium',
-    topics: ['Sliding Window', 'String'], companies: ['Microsoft', 'Google', 'Amazon'],
-    description: 'Check if s2 contains a permutation of s1.',
-    examples: ["Input: s1='ab', s2='eidbaooo' → Output: true"],
-    constraints: ['1 <= s1.length, s2.length <= 10^4']
-  },
-  {
-    leetcodeNum: 76, title: 'Minimum Window Substring', difficulty: 'Hard',
-    topics: ['Sliding Window', 'String'], companies: ['Facebook', 'Amazon', 'Google', 'Microsoft'],
-    description: 'Find the minimum window substring of s that contains all characters of t.',
-    examples: ["Input: s='ADOBECODEBANC', t='ABC' → Output: 'BANC'"],
-    constraints: ['1 <= m, n <= 10^5']
-  },
-  {
-    leetcodeNum: 239, title: 'Sliding Window Maximum', difficulty: 'Hard',
-    topics: ['Sliding Window', 'Deque'], companies: ['Amazon', 'Google', 'Microsoft'],
-    description: 'Return the max of each sliding window of size k.',
-    examples: ['Input: nums=[1,3,-1,-3,5,3,6,7], k=3 → Output: [3,3,5,5,6,7]'],
-    constraints: ['1 <= nums.length <= 10^5', '1 <= k <= nums.length']
-  },
+  // ── Stack ─────────────────────────────────────────────
+  { leetcodeNum: 20,  title: 'Valid Parentheses', difficulty: 'Easy', topics: ['Stack','String'], companies: ['Google','Amazon','Facebook'], description: 'Determine if bracket string is valid.', examples: ['"()[]{}" → true'], constraints: ['1 <= s.length <= 10^4'] },
+  { leetcodeNum: 155, title: 'Min Stack', difficulty: 'Medium', topics: ['Stack'], companies: ['Amazon','Google','Microsoft'], description: 'Design a stack that supports push, pop, top, and retrieving the minimum.', examples: ['push(-3), getMin() → -3'], constraints: ['-2^31 <= val <= 2^31-1'] },
+  { leetcodeNum: 150, title: 'Evaluate Reverse Polish Notation', difficulty: 'Medium', topics: ['Stack','Array'], companies: ['Amazon','LinkedIn'], description: 'Evaluate the value of an expression in Reverse Polish Notation.', examples: ['["2","1","+","3","*"] → 9'], constraints: ['1 <= tokens.length <= 10^4'] },
+  { leetcodeNum: 22,  title: 'Generate Parentheses', difficulty: 'Medium', topics: ['Stack','Backtracking'], companies: ['Google','Amazon','Microsoft'], description: 'Generate all combinations of n pairs of valid parentheses.', examples: ['n=3 → ["((()))","(()())","(())()","()(())","()()()"]'], constraints: ['1 <= n <= 8'] },
+  { leetcodeNum: 739, title: 'Daily Temperatures', difficulty: 'Medium', topics: ['Stack','Array'], companies: ['Amazon','Google'], description: 'For each day, find how many days until a warmer temperature.', examples: ['[73,74,75,71,69,72,76,73] → [1,1,4,2,1,1,0,0]'], constraints: ['1 <= n <= 10^5'] },
+  { leetcodeNum: 853, title: 'Car Fleet', difficulty: 'Medium', topics: ['Stack','Array','Sorting'], companies: ['Google'], description: 'Find number of car fleets that arrive at destination.', examples: ['target=12, position=[10,8,0,5,3], speed=[2,4,1,1,3] → 3'], constraints: ['1 <= n <= 10^5'] },
+  { leetcodeNum: 84,  title: 'Largest Rectangle in Histogram', difficulty: 'Hard', topics: ['Stack','Array'], companies: ['Amazon','Google','Microsoft'], description: 'Find largest rectangle in histogram.', examples: ['[2,1,5,6,2,3] → 10'], constraints: ['1 <= n <= 10^5'] },
 
-  // ── STACK (5) ───────────────────────────────────────────────
-  {
-    leetcodeNum: 20, title: 'Valid Parentheses', difficulty: 'Easy',
-    topics: ['Stack', 'String'], companies: ['Google', 'Amazon', 'Facebook', 'Microsoft'],
-    description: 'Check if a string of brackets is valid.',
-    examples: ["Input: s='()[]{}' → Output: true", "Input: s='(]' → Output: false"],
-    constraints: ['1 <= s.length <= 10^4']
-  },
-  {
-    leetcodeNum: 155, title: 'Min Stack', difficulty: 'Medium',
-    topics: ['Stack'], companies: ['Amazon', 'Google', 'Bloomberg'],
-    description: 'Design a stack that supports push, pop, top, and getMin in O(1).',
-    examples: ['MinStack obj; obj.push(-3); obj.getMin() → -3'],
-    constraints: ['-2^31 <= val <= 2^31 - 1', 'pop/top/getMin called on non-empty stack']
-  },
-  {
-    leetcodeNum: 150, title: 'Evaluate Reverse Polish Notation', difficulty: 'Medium',
-    topics: ['Stack', 'Array'], companies: ['Amazon', 'LinkedIn'],
-    description: 'Evaluate the value of an arithmetic expression in Reverse Polish Notation.',
-    examples: ['Input: tokens=["2","1","+","3","*"] → Output: 9'],
-    constraints: ['1 <= tokens.length <= 10^4']
-  },
-  {
-    leetcodeNum: 84, title: 'Largest Rectangle in Histogram', difficulty: 'Hard',
-    topics: ['Stack', 'Array'], companies: ['Amazon', 'Google', 'Microsoft'],
-    description: 'Find the largest rectangle in a histogram.',
-    examples: ['Input: heights=[2,1,5,6,2,3] → Output: 10'],
-    constraints: ['1 <= heights.length <= 10^5', '0 <= heights[i] <= 10^4']
-  },
-  {
-    leetcodeNum: 853, title: 'Car Fleet', difficulty: 'Medium',
-    topics: ['Stack', 'Array'], companies: ['Google', 'Amazon'],
-    description: 'Find how many car fleets arrive at destination.',
-    examples: ['Input: target=12, position=[10,8,0,5,3], speed=[2,4,1,1,3] → Output: 3'],
-    constraints: ['1 <= n <= 10^5']
-  },
+  // ── Binary Search ─────────────────────────────────────
+  { leetcodeNum: 704, title: 'Binary Search', difficulty: 'Easy', topics: ['Binary Search','Array'], companies: ['Google','Amazon','Microsoft'], description: 'Search for target in sorted array.', examples: ['[-1,0,3,5,9,12], target=9 → 4'], constraints: ['1 <= n <= 10^4'] },
+  { leetcodeNum: 74,  title: 'Search a 2D Matrix', difficulty: 'Medium', topics: ['Binary Search','Matrix'], companies: ['Microsoft','Amazon'], description: 'Search in a sorted m×n matrix in O(log(m*n)).', examples: ['matrix=[[1,3,5],[7,10,11],[16,20,23]], target=3 → true'], constraints: ['1 <= m,n <= 100'] },
+  { leetcodeNum: 875, title: 'Koko Eating Bananas', difficulty: 'Medium', topics: ['Binary Search'], companies: ['Facebook','Amazon'], description: 'Find minimum eating speed k to finish all bananas in h hours.', examples: ['[3,6,7,11], h=8 → 4'], constraints: ['1 <= piles.length <= 10^4'] },
+  { leetcodeNum: 33,  title: 'Search in Rotated Sorted Array', difficulty: 'Medium', topics: ['Binary Search','Array'], companies: ['Amazon','Microsoft','Facebook'], description: 'Search for target in rotated sorted array.', examples: ['[4,5,6,7,0,1,2], target=0 → 4'], constraints: ['1 <= n <= 5000'] },
+  { leetcodeNum: 153, title: 'Find Minimum in Rotated Sorted Array', difficulty: 'Medium', topics: ['Binary Search','Array'], companies: ['Microsoft','Amazon','Google'], description: 'Find minimum element in rotated sorted array.', examples: ['[3,4,5,1,2] → 1'], constraints: ['1 <= n <= 5000'] },
+  { leetcodeNum: 981, title: 'Time Based Key-Value Store', difficulty: 'Medium', topics: ['Binary Search','HashMap'], companies: ['Google','Facebook'], description: 'Design a time-based key-value store with binary search retrieval.', examples: ['set("foo","bar",1), get("foo",1) → "bar"'], constraints: ['1 <= key.length, value.length <= 100'] },
+  { leetcodeNum: 4,   title: 'Median of Two Sorted Arrays', difficulty: 'Hard', topics: ['Binary Search','Array'], companies: ['Google','Amazon','Microsoft','Apple'], description: 'Find median of two sorted arrays in O(log(m+n)).', examples: ['[1,3],[2] → 2.0', '[1,2],[3,4] → 2.5'], constraints: ['0 <= m,n <= 1000'] },
 
-  // ── BINARY SEARCH (5) ───────────────────────────────────────
-  {
-    leetcodeNum: 704, title: 'Binary Search', difficulty: 'Easy',
-    topics: ['Binary Search', 'Array'], companies: ['Google', 'Amazon', 'Microsoft'],
-    description: 'Search for a target in a sorted array. Return index or -1.',
-    examples: ['Input: nums=[-1,0,3,5,9,12], target=9 → Output: 4'],
-    constraints: ['1 <= nums.length <= 10^4', 'All elements are unique']
-  },
-  {
-    leetcodeNum: 33, title: 'Search in Rotated Sorted Array', difficulty: 'Medium',
-    topics: ['Binary Search', 'Array'], companies: ['Amazon', 'Microsoft', 'Facebook', 'Google'],
-    description: 'Search for target in a rotated sorted array.',
-    examples: ['Input: nums=[4,5,6,7,0,1,2], target=0 → Output: 4'],
-    constraints: ['1 <= nums.length <= 5000', 'All values are unique']
-  },
-  {
-    leetcodeNum: 153, title: 'Find Minimum in Rotated Sorted Array', difficulty: 'Medium',
-    topics: ['Binary Search', 'Array'], companies: ['Microsoft', 'Amazon', 'Google'],
-    description: 'Find the minimum element in a rotated sorted array.',
-    examples: ['Input: nums=[3,4,5,1,2] → Output: 1'],
-    constraints: ['n == nums.length', '1 <= n <= 5000', 'All integers are unique']
-  },
-  {
-    leetcodeNum: 981, title: 'Time Based Key-Value Store', difficulty: 'Medium',
-    topics: ['Binary Search', 'HashMap'], companies: ['Google', 'Facebook', 'Amazon'],
-    description: 'Design a time-based key-value store with set and get using timestamps.',
-    examples: ['TimeMap.set("foo","bar",1); TimeMap.get("foo",1) → "bar"'],
-    constraints: ['1 <= key.length, value.length <= 100', '1 <= timestamp <= 10^7']
-  },
-  {
-    leetcodeNum: 4, title: 'Median of Two Sorted Arrays', difficulty: 'Hard',
-    topics: ['Binary Search', 'Array'], companies: ['Google', 'Amazon', 'Microsoft', 'Apple'],
-    description: 'Find the median of two sorted arrays in O(log(m+n)) time.',
-    examples: ['Input: nums1=[1,3], nums2=[2] → Output: 2.00000'],
-    constraints: ['0 <= m, n <= 1000', 'nums1 and nums2 are sorted']
-  },
+  // ── Linked List ───────────────────────────────────────
+  { leetcodeNum: 206, title: 'Reverse Linked List', difficulty: 'Easy', topics: ['LinkedList'], companies: ['Amazon','Microsoft','Google'], description: 'Reverse a singly linked list.', examples: ['1→2→3→4→5 → 5→4→3→2→1'], constraints: ['0 <= n <= 5000'] },
+  { leetcodeNum: 21,  title: 'Merge Two Sorted Lists', difficulty: 'Easy', topics: ['LinkedList'], companies: ['Amazon','Microsoft','Google'], description: 'Merge two sorted linked lists into one sorted list.', examples: ['[1,2,4],[1,3,4] → [1,1,2,3,4,4]'], constraints: ['0 <= n,m <= 50'] },
+  { leetcodeNum: 141, title: 'Linked List Cycle', difficulty: 'Easy', topics: ['LinkedList','Two Pointers'], companies: ['Amazon','Microsoft','Bloomberg'], description: "Detect if linked list has a cycle using Floyd's algorithm.", examples: ['3→2→0→-4→(cycle to 2) → true'], constraints: ['0 <= n <= 10^4'] },
+  { leetcodeNum: 143, title: 'Reorder List', difficulty: 'Medium', topics: ['LinkedList','Two Pointers'], companies: ['Facebook','Amazon'], description: 'Reorder list: L0→L1→…→Ln-1→Ln → L0→Ln→L1→Ln-1→…', examples: ['[1,2,3,4,5] → [1,5,2,4,3]'], constraints: ['1 <= n <= 5*10^4'] },
+  { leetcodeNum: 19,  title: 'Remove Nth Node From End of List', difficulty: 'Medium', topics: ['LinkedList','Two Pointers'], companies: ['Amazon','Microsoft','Google'], description: 'Remove the nth node from the end of the list.', examples: ['[1,2,3,4,5], n=2 → [1,2,3,5]'], constraints: ['1 <= n <= 30'] },
+  { leetcodeNum: 138, title: 'Copy List with Random Pointer', difficulty: 'Medium', topics: ['LinkedList','HashMap'], companies: ['Amazon','Microsoft','Google'], description: 'Deep copy linked list with random pointers.', examples: ['[[7,null],[13,0],[11,4]] → same structure deep copied'], constraints: ['0 <= n <= 1000'] },
+  { leetcodeNum: 2,   title: 'Add Two Numbers', difficulty: 'Medium', topics: ['LinkedList','Math'], companies: ['Amazon','Microsoft','Bloomberg'], description: 'Add two numbers represented as reversed linked lists.', examples: ['[2,4,3]+[5,6,4] → [7,0,8]'], constraints: ['1 <= n,m <= 100'] },
+  { leetcodeNum: 287, title: 'Find the Duplicate Number', difficulty: 'Medium', topics: ['LinkedList','Two Pointers','Binary Search'], companies: ['Google','Amazon','Facebook'], description: 'Find duplicate in array of n+1 integers without modifying array.', examples: ['[1,3,4,2,2] → 2'], constraints: ['1 <= n <= 10^5'] },
+  { leetcodeNum: 146, title: 'LRU Cache', difficulty: 'Medium', topics: ['LinkedList','HashMap'], companies: ['Google','Amazon','Microsoft'], description: 'Design a data structure with O(1) get and put for LRU cache.', examples: ['get(1)=-1 when not present, evicts LRU on capacity overflow'], constraints: ['1 <= capacity <= 3000'] },
+  { leetcodeNum: 23,  title: 'Merge K Sorted Lists', difficulty: 'Hard', topics: ['LinkedList','Heap','Divide and Conquer'], companies: ['Google','Amazon','Facebook'], description: 'Merge k sorted linked lists into one sorted list.', examples: ['[[1,4,5],[1,3,4],[2,6]] → [1,1,2,3,4,4,5,6]'], constraints: ['0 <= k <= 10^4'] },
+  { leetcodeNum: 25,  title: 'Reverse Nodes in k-Group', difficulty: 'Hard', topics: ['LinkedList'], companies: ['Google','Microsoft'], description: 'Reverse nodes in groups of k in a linked list.', examples: ['[1,2,3,4,5], k=2 → [2,1,4,3,5]'], constraints: ['1 <= k <= n <= 5000'] },
 
-  // ── LINKED LIST (5) ─────────────────────────────────────────
-  {
-    leetcodeNum: 206, title: 'Reverse Linked List', difficulty: 'Easy',
-    topics: ['LinkedList'], companies: ['Amazon', 'Microsoft', 'Google', 'Facebook'],
-    description: 'Reverse a singly linked list.',
-    examples: ['Input: 1→2→3→4→5 → Output: 5→4→3→2→1'],
-    constraints: ['0 <= nodes <= 5000', '-5000 <= Node.val <= 5000']
-  },
-  {
-    leetcodeNum: 21, title: 'Merge Two Sorted Lists', difficulty: 'Easy',
-    topics: ['LinkedList'], companies: ['Amazon', 'Microsoft', 'Google'],
-    description: 'Merge two sorted linked lists into one sorted list.',
-    examples: ['Input: l1=1→2→4, l2=1→3→4 → Output: 1→1→2→3→4→4'],
-    constraints: ['0 <= nodes in each list <= 50', '-100 <= Node.val <= 100']
-  },
-  {
-    leetcodeNum: 141, title: 'Linked List Cycle', difficulty: 'Easy',
-    topics: ['LinkedList', 'Two Pointers'], companies: ['Amazon', 'Microsoft', 'Bloomberg'],
-    description: "Detect if a linked list has a cycle using Floyd's algorithm.",
-    examples: ['Input: 3→2→0→-4→(back to 2) → Output: true'],
-    constraints: ['0 <= nodes <= 10^4', '-10^5 <= Node.val <= 10^5']
-  },
-  {
-    leetcodeNum: 19, title: 'Remove Nth Node From End of List', difficulty: 'Medium',
-    topics: ['LinkedList', 'Two Pointers'], companies: ['Amazon', 'Microsoft', 'Google'],
-    description: 'Remove the nth node from the end of the list in one pass.',
-    examples: ['Input: 1→2→3→4→5, n=2 → Output: 1→2→3→5'],
-    constraints: ['1 <= sz <= 30', '0 <= Node.val <= 100', '1 <= n <= sz']
-  },
-  {
-    leetcodeNum: 23, title: 'Merge K Sorted Lists', difficulty: 'Hard',
-    topics: ['LinkedList', 'Heap'], companies: ['Amazon', 'Google', 'Microsoft', 'Facebook'],
-    description: 'Merge k sorted linked lists into one sorted list.',
-    examples: ['Input: [[1,4,5],[1,3,4],[2,6]] → Output: 1→1→2→3→4→4→5→6'],
-    constraints: ['k == lists.length', '0 <= k <= 10^4', '0 <= nodes in each list <= 500']
-  },
+  // ── Trees ─────────────────────────────────────────────
+  { leetcodeNum: 226, title: 'Invert Binary Tree', difficulty: 'Easy', topics: ['Tree','DFS','BFS'], companies: ['Google','Amazon','Microsoft'], description: 'Invert a binary tree.', examples: ['[4,2,7,1,3,6,9] → [4,7,2,9,6,3,1]'], constraints: ['0 <= n <= 100'] },
+  { leetcodeNum: 104, title: 'Maximum Depth of Binary Tree', difficulty: 'Easy', topics: ['Tree','DFS','BFS'], companies: ['Google','Amazon','LinkedIn'], description: 'Return the maximum depth of a binary tree.', examples: ['[3,9,20,null,null,15,7] → 3'], constraints: ['0 <= n <= 10^4'] },
+  { leetcodeNum: 543, title: 'Diameter of Binary Tree', difficulty: 'Easy', topics: ['Tree','DFS'], companies: ['Facebook','Google','Amazon'], description: 'Return the length of the diameter of the tree.', examples: ['[1,2,3,4,5] → 3'], constraints: ['1 <= n <= 10^4'] },
+  { leetcodeNum: 110, title: 'Balanced Binary Tree', difficulty: 'Easy', topics: ['Tree','DFS'], companies: ['Amazon','Google'], description: 'Determine if a binary tree is height-balanced.', examples: ['[3,9,20,null,null,15,7] → true'], constraints: ['0 <= n <= 5000'] },
+  { leetcodeNum: 100, title: 'Same Tree', difficulty: 'Easy', topics: ['Tree','DFS','BFS'], companies: ['Bloomberg','Amazon'], description: 'Check if two binary trees are the same.', examples: ['[1,2,3],[1,2,3] → true'], constraints: ['0 <= n <= 100'] },
+  { leetcodeNum: 572, title: 'Subtree of Another Tree', difficulty: 'Easy', topics: ['Tree','DFS','String Matching'], companies: ['Amazon','Facebook'], description: 'Given root and subRoot, return true if subRoot is a subtree of root.', examples: ['[3,4,5,1,2],[4,1,2] → true'], constraints: ['1 <= n <= 2000'] },
+  { leetcodeNum: 235, title: 'Lowest Common Ancestor of a BST', difficulty: 'Medium', topics: ['Tree','DFS'], companies: ['Facebook','Amazon','Google'], description: 'Find LCA of two nodes in a BST.', examples: ['root=[6,2,8,0,4,7,9], p=2, q=8 → 6'], constraints: ['2 <= n <= 10^5'] },
+  { leetcodeNum: 102, title: 'Binary Tree Level Order Traversal', difficulty: 'Medium', topics: ['Tree','BFS'], companies: ['Amazon','Microsoft','Facebook'], description: 'Return level order traversal of binary tree.', examples: ['[3,9,20,null,null,15,7] → [[3],[9,20],[15,7]]'], constraints: ['0 <= n <= 2000'] },
+  { leetcodeNum: 199, title: 'Binary Tree Right Side View', difficulty: 'Medium', topics: ['Tree','BFS','DFS'], companies: ['Amazon','Facebook'], description: 'Return values visible from right side of binary tree.', examples: ['[1,2,3,null,5,null,4] → [1,3,4]'], constraints: ['0 <= n <= 100'] },
+  { leetcodeNum: 1448, title: 'Count Good Nodes in Binary Tree', difficulty: 'Medium', topics: ['Tree','DFS'], companies: ['Microsoft'], description: 'Count nodes where no ancestor has a greater value.', examples: ['[3,1,4,3,null,1,5] → 4'], constraints: ['1 <= n <= 10^5'] },
+  { leetcodeNum: 98,  title: 'Validate Binary Search Tree', difficulty: 'Medium', topics: ['Tree','DFS'], companies: ['Amazon','Google','Microsoft'], description: 'Determine if a binary tree is a valid BST.', examples: ['[2,1,3] → true', '[5,1,4,null,null,3,6] → false'], constraints: ['1 <= n <= 10^4'] },
+  { leetcodeNum: 230, title: 'Kth Smallest Element in a BST', difficulty: 'Medium', topics: ['Tree','DFS'], companies: ['Google','Amazon','Microsoft'], description: 'Find kth smallest element in a BST.', examples: ['[3,1,4,null,2], k=1 → 1'], constraints: ['1 <= n <= 10^4'] },
+  { leetcodeNum: 105, title: 'Construct Binary Tree from Preorder and Inorder Traversal', difficulty: 'Medium', topics: ['Tree','DFS','HashMap'], companies: ['Amazon','Microsoft','Bloomberg'], description: 'Construct binary tree from preorder and inorder traversal arrays.', examples: ['preorder=[3,9,20,15,7], inorder=[9,3,15,20,7]'], constraints: ['1 <= n <= 3000'] },
+  { leetcodeNum: 124, title: 'Binary Tree Maximum Path Sum', difficulty: 'Hard', topics: ['Tree','DFS'], companies: ['Google','Amazon','Facebook'], description: 'Find maximum path sum in a binary tree.', examples: ['[-10,9,20,null,null,15,7] → 42'], constraints: ['1 <= n <= 3*10^4'] },
+  { leetcodeNum: 297, title: 'Serialize and Deserialize Binary Tree', difficulty: 'Hard', topics: ['Tree','DFS','BFS','Design'], companies: ['Google','Amazon','Facebook'], description: 'Design algorithm to serialize and deserialize a binary tree.', examples: ['[1,2,3,null,null,4,5] → "1,2,3,null,null,4,5" → [1,2,3,null,null,4,5]'], constraints: ['0 <= n <= 10^4'] },
 
-  // ── TREE (5) ────────────────────────────────────────────────
-  {
-    leetcodeNum: 226, title: 'Invert Binary Tree', difficulty: 'Easy',
-    topics: ['Tree', 'BFS'], companies: ['Google', 'Amazon', 'Microsoft'],
-    description: 'Invert a binary tree.',
-    examples: ['Input: [4,2,7,1,3,6,9] → Output: [4,7,2,9,6,3,1]'],
-    constraints: ['0 <= nodes <= 100', '-100 <= Node.val <= 100']
-  },
-  {
-    leetcodeNum: 104, title: 'Maximum Depth of Binary Tree', difficulty: 'Easy',
-    topics: ['Tree', 'DFS'], companies: ['LinkedIn', 'Google', 'Amazon'],
-    description: 'Find the maximum depth of a binary tree.',
-    examples: ['Input: [3,9,20,null,null,15,7] → Output: 3'],
-    constraints: ['0 <= nodes <= 10^4', '-100 <= Node.val <= 100']
-  },
-  {
-    leetcodeNum: 102, title: 'Binary Tree Level Order Traversal', difficulty: 'Medium',
-    topics: ['Tree', 'BFS'], companies: ['Amazon', 'Microsoft', 'Facebook', 'Google'],
-    description: 'Return level order traversal of binary tree values.',
-    examples: ['Input: [3,9,20,null,null,15,7] → Output: [[3],[9,20],[15,7]]'],
-    constraints: ['0 <= nodes <= 2000', '-1000 <= Node.val <= 1000']
-  },
-  {
-    leetcodeNum: 98, title: 'Validate Binary Search Tree', difficulty: 'Medium',
-    topics: ['Tree', 'DFS'], companies: ['Amazon', 'Microsoft', 'Facebook', 'Bloomberg'],
-    description: 'Determine if a binary tree is a valid BST.',
-    examples: ['Input: [2,1,3] → Output: true', 'Input: [5,1,4,null,null,3,6] → Output: false'],
-    constraints: ['1 <= nodes <= 10^4', '-2^31 <= Node.val <= 2^31 - 1']
-  },
-  {
-    leetcodeNum: 124, title: 'Binary Tree Maximum Path Sum', difficulty: 'Hard',
-    topics: ['Tree', 'DFS'], companies: ['Google', 'Amazon', 'Facebook', 'Microsoft'],
-    description: "Find the maximum path sum in a binary tree (path doesn't need to go through root).",
-    examples: ['Input: [-10,9,20,null,null,15,7] → Output: 42'],
-    constraints: ['1 <= nodes <= 3 * 10^4', '-1000 <= Node.val <= 1000']
-  },
+  // ── Heap/Priority Queue ───────────────────────────────
+  { leetcodeNum: 703, title: 'Kth Largest Element in a Stream', difficulty: 'Easy', topics: ['Heap'], companies: ['Amazon','Google'], description: 'Design a class to find kth largest element in a stream.', examples: ['KthLargest(3,[4,5,8,2]), add(3)→4, add(5)→5'], constraints: ['1 <= k <= 10^4'] },
+  { leetcodeNum: 1046, title: 'Last Stone Weight', difficulty: 'Easy', topics: ['Heap'], companies: ['Amazon'], description: 'Smash two heaviest stones; return weight of last stone.', examples: ['[2,7,4,1,8,1] → 1'], constraints: ['1 <= n <= 30'] },
+  { leetcodeNum: 973, title: 'K Closest Points to Origin', difficulty: 'Medium', topics: ['Heap','Sort'], companies: ['Amazon','Facebook','Google'], description: 'Return the k closest points to the origin.', examples: ['[[1,3],[-2,2]], k=1 → [[-2,2]]'], constraints: ['1 <= k <= n <= 10^4'] },
+  { leetcodeNum: 215, title: 'Kth Largest Element in an Array', difficulty: 'Medium', topics: ['Heap','Quickselect'], companies: ['Facebook','Amazon','Google'], description: 'Find kth largest element without sorting.', examples: ['[3,2,1,5,6,4], k=2 → 5'], constraints: ['1 <= k <= n <= 10^4'] },
+  { leetcodeNum: 621, title: 'Task Scheduler', difficulty: 'Medium', topics: ['Heap','Greedy'], companies: ['Facebook','Amazon'], description: 'Return least number of intervals to finish tasks with cooldown n.', examples: ['["A","A","A","B","B","B"], n=2 → 8'], constraints: ['1 <= tasks.length <= 10^4'] },
+  { leetcodeNum: 355, title: 'Design Twitter', difficulty: 'Medium', topics: ['Heap','HashMap','Design'], companies: ['Amazon'], description: 'Design simplified Twitter with postTweet, getNewsFeed, follow, unfollow.', examples: ['postTweet(1,5), getNewsFeed(1) → [5]'], constraints: ['1 <= userId, tweetId <= 500'] },
+  { leetcodeNum: 295, title: 'Find Median from Data Stream', difficulty: 'Hard', topics: ['Heap','Design'], companies: ['Google','Amazon','Microsoft'], description: 'Design a data structure to find the median efficiently.', examples: ['addNum(1), addNum(2), findMedian()→1.5'], constraints: ['-10^5 <= num <= 10^5'] },
+
+  // ── Graphs ────────────────────────────────────────────
+  { leetcodeNum: 200, title: 'Number of Islands', difficulty: 'Medium', topics: ['Graph','DFS','BFS','Matrix'], companies: ['Amazon','Google','Facebook'], description: 'Count number of islands in a 2D grid.', examples: ['grid with 1s and 0s → 1'], constraints: ['1 <= m,n <= 300'] },
+  { leetcodeNum: 133, title: 'Clone Graph', difficulty: 'Medium', topics: ['Graph','DFS','BFS','HashMap'], companies: ['Google','Amazon','Facebook'], description: 'Deep copy a connected undirected graph.', examples: ['[[2,4],[1,3],[2,4],[1,3]] → same structure cloned'], constraints: ['0 <= n <= 100'] },
+  { leetcodeNum: 695, title: 'Max Area of Island', difficulty: 'Medium', topics: ['Graph','DFS','Matrix'], companies: ['Amazon','Google'], description: 'Find the maximum area of an island in a grid.', examples: ['grid → 6'], constraints: ['m,n <= 50'] },
+  { leetcodeNum: 417, title: 'Pacific Atlantic Water Flow', difficulty: 'Medium', topics: ['Graph','DFS','BFS','Matrix'], companies: ['Google'], description: 'Find cells where water can flow to both Pacific and Atlantic.', examples: ['heights=[[1,2,2,3,5],[3,2,3,4,4],...] → [[0,4],[1,3],...]'], constraints: ['1 <= m,n <= 200'] },
+  { leetcodeNum: 130, title: 'Surrounded Regions', difficulty: 'Medium', topics: ['Graph','DFS','BFS','Matrix'], companies: ['Google','Amazon'], description: 'Capture all regions surrounded by X.', examples: ['board with X and O → captured O→X'], constraints: ['m,n >= 1'] },
+  { leetcodeNum: 994, title: 'Rotting Oranges', difficulty: 'Medium', topics: ['Graph','BFS','Matrix'], companies: ['Amazon','Google','Facebook'], description: 'Find minimum time for all oranges to rot via BFS.', examples: ['[[2,1,1],[1,1,0],[0,1,1]] → 4'], constraints: ['1 <= m,n <= 10'] },
+  { leetcodeNum: 286, title: 'Walls and Gates', difficulty: 'Medium', topics: ['Graph','BFS','Matrix'], companies: ['Facebook','Google'], description: 'Fill each empty room with distance to nearest gate.', examples: ['INF cells filled with BFS distance'], constraints: ['m,n <= 250'] },
+  { leetcodeNum: 207, title: 'Course Schedule', difficulty: 'Medium', topics: ['Graph','DFS','Topological Sort'], companies: ['Amazon','Google','Facebook'], description: 'Detect if all courses can be finished (cycle detection in directed graph).', examples: ['n=2, prerequisites=[[1,0]] → true'], constraints: ['1 <= n <= 2000'] },
+  { leetcodeNum: 210, title: 'Course Schedule II', difficulty: 'Medium', topics: ['Graph','DFS','Topological Sort'], companies: ['Amazon','Google','Facebook'], description: 'Return order to finish all courses or [] if impossible.', examples: ['n=4, [[1,0],[2,0],[3,1],[3,2]] → [0,2,1,3]'], constraints: ['1 <= n <= 2000'] },
+  { leetcodeNum: 684, title: 'Redundant Connection', difficulty: 'Medium', topics: ['Graph','Union Find'], companies: ['Amazon','Google'], description: 'Find and remove redundant edge to make graph a tree.', examples: ['[[1,2],[1,3],[2,3]] → [2,3]'], constraints: ['n == edges.length, 3 <= n <= 1000'] },
+  { leetcodeNum: 127, title: 'Word Ladder', difficulty: 'Hard', topics: ['Graph','BFS'], companies: ['Amazon','Google','LinkedIn'], description: 'Find shortest transformation sequence from beginWord to endWord.', examples: ['"hit","cog",["hot","dot","dog","lot","log","cog"] → 5'], constraints: ['1 <= wordList.length <= 5000'] },
+
+  // ── Tries ─────────────────────────────────────────────
+  { leetcodeNum: 208, title: 'Implement Trie (Prefix Tree)', difficulty: 'Medium', topics: ['Trie','Design'], companies: ['Google','Amazon','Facebook'], description: 'Implement a trie with insert, search, and startsWith.', examples: ['insert("apple"), search("apple")→true, search("app")→false'], constraints: ['1 <= word.length <= 2000'] },
+  { leetcodeNum: 211, title: 'Design Add and Search Words Data Structure', difficulty: 'Medium', topics: ['Trie','DFS','Design'], companies: ['Facebook','Amazon'], description: 'Word dictionary supporting add and search with "." wildcards.', examples: ['addWord("bad"), search(".ad") → true'], constraints: ['1 <= word.length <= 25'] },
+  { leetcodeNum: 212, title: 'Word Search II', difficulty: 'Hard', topics: ['Trie','DFS','Backtracking','Matrix'], companies: ['Google','Amazon','Airbnb'], description: 'Find all words from a list in a 2D board.', examples: ['board+words=["eat","oath"] → ["eat","oath"]'], constraints: ['m,n <= 12, words.length <= 3*10^4'] },
+
+  // ── Backtracking ──────────────────────────────────────
+  { leetcodeNum: 78,  title: 'Subsets', difficulty: 'Medium', topics: ['Backtracking','Array'], companies: ['Google','Amazon','Facebook'], description: 'Return all possible subsets (power set).', examples: ['[1,2,3] → [[],[1],[2],[1,2],[3],[1,3],[2,3],[1,2,3]]'], constraints: ['1 <= n <= 10'] },
+  { leetcodeNum: 39,  title: 'Combination Sum', difficulty: 'Medium', topics: ['Backtracking','Array'], companies: ['Amazon','Google','Airbnb'], description: 'Find all combinations that sum to target (can reuse elements).', examples: ['[2,3,6,7], target=7 → [[2,2,3],[7]]'], constraints: ['1 <= n <= 30'] },
+  { leetcodeNum: 46,  title: 'Permutations', difficulty: 'Medium', topics: ['Backtracking','Array'], companies: ['Microsoft','Amazon','Google'], description: 'Return all permutations of distinct integers.', examples: ['[1,2,3] → [[1,2,3],[1,3,2],[2,1,3],...]'], constraints: ['1 <= n <= 6'] },
+  { leetcodeNum: 90,  title: 'Subsets II', difficulty: 'Medium', topics: ['Backtracking','Array','Sorting'], companies: ['Amazon','Google'], description: 'Return all subsets of array that may contain duplicates.', examples: ['[1,2,2] → [[],[1],[1,2],[1,2,2],[2],[2,2]]'], constraints: ['1 <= n <= 10'] },
+  { leetcodeNum: 40,  title: 'Combination Sum II', difficulty: 'Medium', topics: ['Backtracking','Array'], companies: ['Amazon'], description: 'Find combinations summing to target; each number used once.', examples: ['[10,1,2,7,6,1,5], target=8 → [[1,1,6],[1,2,5],[1,7],[2,6]]'], constraints: ['1 <= n <= 100'] },
+  { leetcodeNum: 79,  title: 'Word Search', difficulty: 'Medium', topics: ['Backtracking','DFS','Matrix'], companies: ['Amazon','Microsoft','Bloomberg'], description: 'Find if word exists in 2D grid via adjacent cells.', examples: ['board+word="ABCCED" → true'], constraints: ['m,n <= 6, word.length <= 15'] },
+  { leetcodeNum: 131, title: 'Palindrome Partitioning', difficulty: 'Medium', topics: ['Backtracking','DP'], companies: ['Amazon','Google','Bloomberg'], description: 'Partition string such that every substring is a palindrome.', examples: ['"aab" → [["a","a","b"],["aa","b"]]'], constraints: ['1 <= s.length <= 16'] },
+  { leetcodeNum: 17,  title: 'Letter Combinations of a Phone Number', difficulty: 'Medium', topics: ['Backtracking','HashMap'], companies: ['Amazon','Google','Facebook'], description: 'Return all possible letter combinations for phone digits.', examples: ['"23" → ["ad","ae","af","bd","be","bf","cd","ce","cf"]'], constraints: ['0 <= digits.length <= 4'] },
+  { leetcodeNum: 51,  title: 'N-Queens', difficulty: 'Hard', topics: ['Backtracking'], companies: ['Google','Amazon'], description: 'Place n queens on n×n board so no two queens attack each other.', examples: ['n=4 → [[".Q..","...Q","Q...","..Q."],["..Q.","Q...","...Q",".Q.."]]'], constraints: ['1 <= n <= 9'] },
+
+  // ── 1-D Dynamic Programming ───────────────────────────
+  { leetcodeNum: 70,  title: 'Climbing Stairs', difficulty: 'Easy', topics: ['DP'], companies: ['Amazon','Google','Adobe'], description: 'Count ways to climb n stairs taking 1 or 2 steps.', examples: ['n=3 → 3'], constraints: ['1 <= n <= 45'] },
+  { leetcodeNum: 746, title: 'Min Cost Climbing Stairs', difficulty: 'Easy', topics: ['DP'], companies: ['Amazon','Adobe'], description: 'Find minimum cost to reach the top of stairs.', examples: ['[10,15,20] → 15'], constraints: ['2 <= cost.length <= 1000'] },
+  { leetcodeNum: 198, title: 'House Robber', difficulty: 'Medium', topics: ['DP'], companies: ['Amazon','Airbnb','LinkedIn'], description: 'Maximize money robbed from non-adjacent houses.', examples: ['[2,7,9,3,1] → 12'], constraints: ['1 <= n <= 100'] },
+  { leetcodeNum: 213, title: 'House Robber II', difficulty: 'Medium', topics: ['DP'], companies: ['Amazon','Airbnb'], description: 'Houses in a circle; maximize non-adjacent robbery.', examples: ['[2,3,2] → 3', '[1,2,3,1] → 4'], constraints: ['1 <= n <= 100'] },
+  { leetcodeNum: 5,   title: 'Longest Palindromic Substring', difficulty: 'Medium', topics: ['DP','String'], companies: ['Amazon','Microsoft','Bloomberg'], description: 'Return the longest palindromic substring.', examples: ['"babad" → "bab"'], constraints: ['1 <= s.length <= 1000'] },
+  { leetcodeNum: 647, title: 'Palindromic Substrings', difficulty: 'Medium', topics: ['DP','String'], companies: ['Facebook','Amazon'], description: 'Count how many palindromic substrings exist.', examples: ['"abc" → 3', '"aaa" → 6'], constraints: ['1 <= s.length <= 1000'] },
+  { leetcodeNum: 91,  title: 'Decode Ways', difficulty: 'Medium', topics: ['DP'], companies: ['Facebook','Amazon','Microsoft'], description: 'Count ways to decode digit string to letters.', examples: ['"226" → 3'], constraints: ['1 <= s.length <= 100'] },
+  { leetcodeNum: 322, title: 'Coin Change', difficulty: 'Medium', topics: ['DP'], companies: ['Amazon','Google','Facebook'], description: 'Fewest coins needed to make amount.', examples: ['coins=[1,5,11], amount=15 → 3'], constraints: ['1 <= coins.length <= 12'] },
+  { leetcodeNum: 152, title: 'Maximum Product Subarray', difficulty: 'Medium', topics: ['DP','Array'], companies: ['Amazon','Microsoft','LinkedIn'], description: 'Find subarray with largest product.', examples: ['[2,3,-2,4] → 6'], constraints: ['1 <= n <= 2*10^4'] },
+  { leetcodeNum: 139, title: 'Word Break', difficulty: 'Medium', topics: ['DP','Trie'], companies: ['Google','Amazon','Facebook'], description: 'Return true if string can be segmented into dictionary words.', examples: ['"leetcode", ["leet","code"] → true'], constraints: ['1 <= s.length <= 300'] },
+  { leetcodeNum: 300, title: 'Longest Increasing Subsequence', difficulty: 'Medium', topics: ['DP','Binary Search'], companies: ['Google','Amazon','Microsoft'], description: 'Return length of longest strictly increasing subsequence.', examples: ['[10,9,2,5,3,7,101,18] → 4'], constraints: ['1 <= n <= 2500'] },
+  { leetcodeNum: 416, title: 'Partition Equal Subset Sum', difficulty: 'Medium', topics: ['DP'], companies: ['Amazon','Facebook'], description: 'Partition array into two equal-sum subsets.', examples: ['[1,5,11,5] → true'], constraints: ['1 <= n <= 200'] },
+
+  // ── 2-D Dynamic Programming ───────────────────────────
+  { leetcodeNum: 62,  title: 'Unique Paths', difficulty: 'Medium', topics: ['DP','Math'], companies: ['Amazon','Google','Microsoft'], description: 'Count unique paths in m×n grid from top-left to bottom-right.', examples: ['m=3, n=7 → 28'], constraints: ['1 <= m,n <= 100'] },
+  { leetcodeNum: 1143, title: 'Longest Common Subsequence', difficulty: 'Medium', topics: ['DP','String'], companies: ['Google','Amazon','Microsoft'], description: 'Return length of longest common subsequence of two strings.', examples: ['"abcde","ace" → 3'], constraints: ['1 <= m,n <= 1000'] },
+  { leetcodeNum: 309, title: 'Best Time to Buy and Sell Stock with Cooldown', difficulty: 'Medium', topics: ['DP'], companies: ['Google','Amazon'], description: 'Maximize profit with cooldown day after sell.', examples: ['[1,2,3,0,2] → 3'], constraints: ['1 <= n <= 5000'] },
+  { leetcodeNum: 518, title: 'Coin Change II', difficulty: 'Medium', topics: ['DP'], companies: ['Amazon','Google'], description: 'Return number of combinations to make amount.', examples: ['amount=5, coins=[1,2,5] → 4'], constraints: ['1 <= coins.length <= 300'] },
+  { leetcodeNum: 494, title: 'Target Sum', difficulty: 'Medium', topics: ['DP','Backtracking'], companies: ['Facebook','Amazon'], description: 'Count ways to assign +/- to reach target sum.', examples: ['[1,1,1,1,1], target=3 → 5'], constraints: ['1 <= n <= 20'] },
+  { leetcodeNum: 97,  title: 'Interleaving String', difficulty: 'Medium', topics: ['DP','String'], companies: ['Google','Amazon'], description: 'Check if s3 is an interleaving of s1 and s2.', examples: ['"aabcc","dbbca","aadbbcbcac" → true'], constraints: ['0 <= s1,s2,s3 <= 100'] },
+  { leetcodeNum: 329, title: 'Longest Increasing Path in a Matrix', difficulty: 'Hard', topics: ['DP','DFS','Graph'], companies: ['Google','Amazon','Snapchat'], description: 'Find longest increasing path in a matrix.', examples: ['[[9,9,4],[6,6,8],[2,1,1]] → 4'], constraints: ['m,n <= 200'] },
+  { leetcodeNum: 115, title: 'Distinct Subsequences', difficulty: 'Hard', topics: ['DP','String'], companies: ['Google'], description: 'Count distinct subsequences of s which equal t.', examples: ['"rabbbit","rabbit" → 3'], constraints: ['1 <= s,t <= 1000'] },
+  { leetcodeNum: 72,  title: 'Edit Distance', difficulty: 'Hard', topics: ['DP','String'], companies: ['Google','Amazon','Microsoft'], description: 'Minimum operations to convert word1 to word2.', examples: ['"horse","ros" → 3'], constraints: ['0 <= word1,word2 <= 500'] },
+  { leetcodeNum: 312, title: 'Burst Balloons', difficulty: 'Hard', topics: ['DP'], companies: ['Google'], description: 'Maximize coins by bursting balloons optimally.', examples: ['[3,1,5,8] → 167'], constraints: ['1 <= n <= 300'] },
+
+  // ── Greedy ────────────────────────────────────────────
+  { leetcodeNum: 53,  title: 'Maximum Subarray', difficulty: 'Medium', topics: ['Array','DP','Greedy'], companies: ['Amazon','Google','Microsoft'], description: "Find the subarray with the largest sum (Kadane's algorithm).", examples: ['[-2,1,-3,4,-1,2,1,-5,4] → 6'], constraints: ['1 <= n <= 10^5'] },
+  { leetcodeNum: 55,  title: 'Jump Game', difficulty: 'Medium', topics: ['Greedy','DP'], companies: ['Amazon','Google','Microsoft'], description: 'Determine if you can reach the last index.', examples: ['[2,3,1,1,4] → true', '[3,2,1,0,4] → false'], constraints: ['1 <= n <= 3*10^4'] },
+  { leetcodeNum: 45,  title: 'Jump Game II', difficulty: 'Medium', topics: ['Greedy'], companies: ['Amazon','Google'], description: 'Find minimum number of jumps to reach last index.', examples: ['[2,3,1,1,4] → 2'], constraints: ['1 <= n <= 3*10^4'] },
+  { leetcodeNum: 134, title: 'Gas Station', difficulty: 'Medium', topics: ['Greedy','Array'], companies: ['Amazon','Google'], description: 'Find starting gas station index to complete circular route.', examples: ['gas=[1,2,3,4,5], cost=[3,4,5,1,2] → 3'], constraints: ['1 <= n <= 10^5'] },
+  { leetcodeNum: 846, title: 'Hand of Straights', difficulty: 'Medium', topics: ['Greedy','HashMap'], companies: ['Google'], description: 'Can the hand be rearranged into groups of consecutive cards?', examples: ['[1,2,3,6,2,3,4,7,8], groupSize=3 → true'], constraints: ['1 <= hand.length <= 10^4'] },
+  { leetcodeNum: 1899, title: 'Merge Triplets to Form Target Triplet', difficulty: 'Medium', topics: ['Greedy','Array'], companies: ['Google'], description: 'Check if triplets can be merged to form target.', examples: ['[[2,5,3],[1,8,4],[1,7,5]], target=[2,7,5] → true'], constraints: ['1 <= triplets.length <= 10^5'] },
+  { leetcodeNum: 763, title: 'Partition Labels', difficulty: 'Medium', topics: ['Greedy','String','HashMap'], companies: ['Amazon','Facebook'], description: 'Partition string into as many parts as possible with each letter in one part.', examples: ['"ababcbacadefegdehijhklij" → [9,7,8]'], constraints: ['1 <= s.length <= 500'] },
+  { leetcodeNum: 678, title: 'Valid Parenthesis String', difficulty: 'Medium', topics: ['Greedy','Stack','DP'], companies: ['Google','Amazon'], description: 'Check if string with *, (, ) is valid where * can be (, ), or empty.', examples: ['"(*)" → true'], constraints: ['1 <= s.length <= 100'] },
+
+  // ── Intervals ─────────────────────────────────────────
+  { leetcodeNum: 57,  title: 'Insert Interval', difficulty: 'Medium', topics: ['Array','Greedy'], companies: ['Google','Amazon','Facebook'], description: 'Insert a new interval into a sorted non-overlapping intervals list.', examples: ['[[1,3],[6,9]], [2,5] → [[1,5],[6,9]]'], constraints: ['0 <= n <= 10^4'] },
+  { leetcodeNum: 56,  title: 'Merge Intervals', difficulty: 'Medium', topics: ['Array','Sorting'], companies: ['Google','Amazon','Facebook'], description: 'Merge all overlapping intervals.', examples: ['[[1,3],[2,6],[8,10],[15,18]] → [[1,6],[8,10],[15,18]]'], constraints: ['1 <= n <= 10^4'] },
+  { leetcodeNum: 435, title: 'Non-overlapping Intervals', difficulty: 'Medium', topics: ['Array','Greedy','Sorting'], companies: ['Google'], description: 'Minimum intervals to remove to make rest non-overlapping.', examples: ['[[1,2],[2,3],[3,4],[1,3]] → 1'], constraints: ['1 <= n <= 10^5'] },
+  { leetcodeNum: 252, title: 'Meeting Rooms', difficulty: 'Easy', topics: ['Array','Sorting'], companies: ['Facebook','Google'], description: 'Determine if a person can attend all meetings.', examples: ['[[0,30],[5,10],[15,20]] → false'], constraints: ['0 <= n <= 10^4'] },
+  { leetcodeNum: 253, title: 'Meeting Rooms II', difficulty: 'Medium', topics: ['Array','Sorting','Heap'], companies: ['Facebook','Google','Amazon'], description: 'Minimum number of conference rooms required.', examples: ['[[0,30],[5,10],[15,20]] → 2'], constraints: ['1 <= n <= 10^4'] },
+
+  // ── Math & Geometry ───────────────────────────────────
+  { leetcodeNum: 48,  title: 'Rotate Image', difficulty: 'Medium', topics: ['Array','Matrix','Math'], companies: ['Microsoft','Amazon','Google'], description: 'Rotate n×n matrix 90 degrees in-place.', examples: ['[[1,2,3],[4,5,6],[7,8,9]] → [[7,4,1],[8,5,2],[9,6,3]]'], constraints: ['n == matrix.length, 1 <= n <= 20'] },
+  { leetcodeNum: 54,  title: 'Spiral Matrix', difficulty: 'Medium', topics: ['Array','Matrix','Simulation'], companies: ['Amazon','Microsoft','Google'], description: 'Return all elements of matrix in spiral order.', examples: ['[[1,2,3],[4,5,6],[7,8,9]] → [1,2,3,6,9,8,7,4,5]'], constraints: ['m,n <= 10'] },
+  { leetcodeNum: 73,  title: 'Set Matrix Zeroes', difficulty: 'Medium', topics: ['Array','Matrix'], companies: ['Amazon','Microsoft','Google'], description: 'Set entire row and column to 0 if element is 0.', examples: ['[[1,1,1],[1,0,1],[1,1,1]] → [[1,0,1],[0,0,0],[1,0,1]]'], constraints: ['m,n <= 200'] },
+  { leetcodeNum: 371, title: 'Sum of Two Integers', difficulty: 'Medium', topics: ['Bit Manipulation'], companies: ['Amazon','Google'], description: 'Calculate sum of two integers without using + or -.', examples: ['a=1, b=2 → 3'], constraints: ['-1000 <= a,b <= 1000'] },
+  { leetcodeNum: 191, title: 'Number of 1 Bits', difficulty: 'Easy', topics: ['Bit Manipulation'], companies: ['Microsoft','Apple'], description: 'Return number of 1 bits in an unsigned integer.', examples: ['11 (1011) → 3'], constraints: ['0 <= n <= 2^31-1'] },
+  { leetcodeNum: 338, title: 'Counting Bits', difficulty: 'Easy', topics: ['DP','Bit Manipulation'], companies: ['Amazon','Google'], description: 'For each i in [0,n] return number of 1 bits.', examples: ['n=5 → [0,1,1,2,1,2]'], constraints: ['0 <= n <= 10^5'] },
+  { leetcodeNum: 136, title: 'Single Number', difficulty: 'Easy', topics: ['Bit Manipulation'], companies: ['Amazon','Apple','Google'], description: 'Find element appearing once; all others appear twice.', examples: ['[4,1,2,1,2] → 4'], constraints: ['1 <= n <= 3*10^4'] },
+  { leetcodeNum: 268, title: 'Missing Number', difficulty: 'Easy', topics: ['Array','Bit Manipulation','Math'], companies: ['Microsoft','Amazon'], description: 'Find missing number in range [0,n].', examples: ['[3,0,1] → 2'], constraints: ['1 <= n <= 10^4'] },
+  { leetcodeNum: 190, title: 'Reverse Bits', difficulty: 'Easy', topics: ['Bit Manipulation'], companies: ['Apple','Amazon'], description: 'Reverse bits of a 32-bit unsigned integer.', examples: ['n=43261596 → 964176192'], constraints: ['Input is a 32-bit unsigned integer'] },
 ];
-
-async function seed() {
+const seed = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('✅ MongoDB connected');
     await DSAProblem.deleteMany({});
-    console.log('🗑️  Cleared existing DSA problems');
     await DSAProblem.insertMany(problems);
     console.log(`✅ Seeded ${problems.length} DSA problems`);
-
-    const counts = await DSAProblem.aggregate([
-      { $unwind: '$topics' },
-      { $group: { _id: '$topics', count: { $sum: 1 } } },
-      { $sort: { _id: 1 } }
-    ]);
-    console.log('\n📊 Problems by first topic:');
-    counts.forEach(c => console.log(`   ${c._id}: ${c.count}`));
   } catch (err) {
     console.error('❌ Seed failed:', err.message);
   } finally {
     mongoose.disconnect();
   }
-}
+};
 
 seed();

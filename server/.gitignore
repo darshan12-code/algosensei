@@ -1,2 +1,4 @@
 node_modules
 .env
+dist
+project_structure.md

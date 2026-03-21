@@ -1,87 +1,88 @@
-const express = require('express');
-const axios = require('axios');
+// server/routes/animate.js
+// Fix #8: uses shared groqJSON() helper — no more copy-pasted GROQ_URL/MODEL/headers.
+
+import express from 'express';
+import verifyToken from '../middleware/auth.js';
+import rateLimit from '../lib/rateLimiter.js';
+import handleAxiosError from '../lib/handleAxiosError.js';
+import { requireFields, validateStringLength } from '../lib/validate.js';
+import { groqJSON } from '../lib/groq.js';
+// import authMiddleware from '../middleware/auth.js';
 const router = express.Router();
-const verifyToken = require('../middleware/auth');
 
-const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const ANIM_SYSTEM = 'You are a DSA animation engine. Respond with valid JSON only.';
 
-const ANIM_PROMPT = (input) => `You are a DSA animation engine. Analyze this problem or algorithm:
-"${input}"
-
-Return ONLY valid JSON (no markdown, no backticks, no explanation):
+const animPrompt = (input) => `You are a DSA animation engine. Analyze: "${input}"
+Return ONLY valid JSON (no markdown):
 {
-  "title": "algorithm or problem name",
+  "title": "algorithm name",
   "vizType": "array",
   "timeComplexity": "O(?)",
   "spaceComplexity": "O(?)",
   "steps": [
-    {
-      "arr": [2, 7, 11, 15],
-      "highlight": [0],
-      "compare": [0, 1],
-      "sorted": [],
-      "pointers": { "L": 0, "R": 3 },
-      "mapState": {},
-      "explain": "plain English explanation of this step"
-    }
+    { "arr": [2,7,11,15], "highlight": [0], "compare": [], "sorted": [], "pointers": {"L":0}, "mapState": {}, "explain": "step explanation" }
   ],
   "conceptExplain": "core insight in 2 sentences",
-  "interviewTip": "what interviewers specifically look for"
+  "interviewTip": "what interviewers look for"
 }
+Rules: vizType is one of array/hashmap/slidingwindow/stack/bars/tree/linkedlist. Generate 8-15 steps.`;
 
-Rules:
-- vizType must be one of: array, hashmap, slidingwindow, stack
-- arr must always be an array of numbers or single characters
-- highlight = indices being examined (amber)
-- compare = indices being compared (blue)
-- sorted = finalized indices (green)
-- pointers = named pointer positions as { name: index }
-- mapState = current hashmap contents as { key: value } — use {} if not applicable
-- Generate 8-15 steps that clearly show the algorithm executing
-- explain must be a plain English sentence describing exactly what is happening in this step`;
-
-// POST /api/animate
-router.post('/', verifyToken, async (req, res) => {
+router.post('/', verifyToken, rateLimit, async (req, res) => {
   const { input } = req.body;
-  if (!input) return res.status(400).json({ error: 'input is required' });
+
+  const fieldErr = requireFields(['input'], req.body);
+  if (fieldErr) return res.status(400).json({ error: fieldErr });
+
+  const lenErr = validateStringLength(input, 'input', 2000);
+  if (lenErr) return res.status(400).json({ error: lenErr });
 
   try {
-    const response = await axios.post(
-      GROQ_URL,
-      {
-        model: GROQ_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a DSA animation engine. Always respond with valid JSON only. No markdown fences, no preamble, no explanation outside the JSON.'
-          },
-          { role: 'user', content: ANIM_PROMPT(input) }
-        ],
-        response_format: { type: 'json_object' },
-        max_tokens: 2000,
-      },
-      { headers: { Authorization: `Bearer ${process.env.GROQ_KEY}` } }
+    const data = await groqJSON(
+      [
+        { role: 'system', content: ANIM_SYSTEM },
+        { role: 'user',   content: animPrompt(input) },
+      ],
+      { max_tokens: 2000 },
     );
 
-    const raw = response.data.choices[0].message.content;
-
-    // Strip any accidental markdown fences
-    const cleaned = raw.replace(/```json|```/g, '').trim();
-    const data = JSON.parse(cleaned);
-
-    // Validate required fields
-    if (!data.steps || !Array.isArray(data.steps) || data.steps.length === 0) {
+    if (!Array.isArray(data.steps) || data.steps.length === 0) {
       throw new Error('AI returned invalid steps array');
     }
 
     res.json(data);
-
   } catch (err) {
-    // console.error('Animate error:', err.response?.data || err.message);
-     if (err.response) return handleAxiosError(err, res);
-        res.status(500).json({ error: err.message });
+    if (err.response) return handleAxiosError(err, res);
+    res.status(500).json({ error: err.message });
+  }
+});
+router.post('/explain', verifyToken, rateLimit, async (req, res) => {
+  const { input } = req.body;
+  if (!input) return res.status(400).json({ error: 'Input required' });
+
+  try {
+    const parsed = await groqJSON(
+      [{
+        role: 'user',
+        content: `You are an expert DSA teacher. A student submitted: "${input}"
+
+This is complex and cannot be animated simply. Provide a clear explanation as JSON with EXACTLY this structure:
+{
+  "concept": "2-3 sentence plain-English summary of the core idea",
+  "steps": ["Step 1 description", "Step 2 description", "...up to 8 steps"],
+  "timeComplexity": "O(...)",
+  "spaceComplexity": "O(...)",
+  "interviewTip": "One key insight to mention in an interview"
+}
+
+Return ONLY valid JSON, no markdown, no explanation outside the JSON.`
+      }],
+      { max_tokens: 800 },
+    );
+    res.json(parsed);
+  } catch (err) {
+    if (err.response) return handleAxiosError(err, res);
+    res.status(500).json({ error: err.message });
   }
 });
 
-module.exports = router;
+export default router;
