@@ -16,7 +16,9 @@ import trackerRouter   from './routes/tracker.js';
 import dashboardRouter from './routes/dashboard.js';
 
 const app = express();
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
+// Strip trailing slash from CLIENT_URL just in case
+const CLIENT_URL = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
 
 app.use(cors({ origin: CLIENT_URL, credentials: true }));
 app.use(express.json({ limit: '1mb' }));
@@ -36,12 +38,15 @@ app.use('/api/dashboard', dashboardRouter);
 
 app.get('/', (_req, res) => res.json({ message: 'AlgoSensei API v3 🚀' }));
 
-app.use((req, res) => {
-  res.status(404).json({ error: `Route ${req.method} ${req.url} not found` });
-});
+// ✅ Health check BEFORE the 404 handler
 app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'ok', uptime: process.uptime() });
 });
+
+app.use((req, res) => {
+  res.status(404).json({ error: `Route ${req.method} ${req.url} not found` });
+});
+
 app.use((err, _req, res, _next) => {
   console.error('Unhandled error:', err.message);
   res.status(500).json({ error: 'Something went wrong', details: err.message });
