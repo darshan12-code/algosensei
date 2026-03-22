@@ -9,7 +9,7 @@ import DSAProblem from '../models/DSAProblem.js';
 import TechQuestion from '../models/TechQuestion.js';
 import handleAxiosError from '../lib/handleAxiosError.js';
 import { requireFields } from '../lib/validate.js';
-import { groq } from '../lib/groq.js';
+import { groqJSON } from '../lib/groq.js';
 
 const router = express.Router();
 

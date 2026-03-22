@@ -62,23 +62,20 @@ const GlobalStyles = createGlobalStyle`
   }
 
   /* ── Base ────────────────────────────────────────────────── */
-  html {
+ // In GlobalStyles.js — replace everything from "/* ── Base ──" to the end of "#root { ... }"
+
+  html, body {
     height: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
   }
 
   body {
     font-family: ${({ theme }) => theme.fonts.sans};
-    /* FIX: NO transition here — transitions were causing the 1s theme-switch lag.
-       styled-components updates CSS vars synchronously; transition fought against that. */
     background: ${({ theme }) => theme.colors.bg};
     color: ${({ theme }) => theme.colors.textPrimary};
     line-height: 1.6;
-    min-height: 100%;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow-x: hidden;
   }
 
   body.modal-open { overflow: hidden; }
@@ -86,7 +83,8 @@ const GlobalStyles = createGlobalStyle`
   #root {
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100vh;
+    overflow: hidden;
   }
 
   a { color: inherit; text-decoration: none; }

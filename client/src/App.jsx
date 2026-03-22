@@ -232,7 +232,7 @@ export default function App() {
           <Navbar isDark={isDark} onToggleTheme={() => setIsDark(d => !d)} />
 
         
-          <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+          <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden',height: 0 }}>
             <Routes>
               {/* Public */}
               <Route path="/"              element={<Home />} />
