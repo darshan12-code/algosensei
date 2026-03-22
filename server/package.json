@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch index.js",
+    "start": "node index.js",
     "seed": "node scripts/seedDSA.js && node scripts/seedTech.js"
   },
   "dependencies": {
