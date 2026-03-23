@@ -24,23 +24,32 @@ router.get('/google/callback',
   }
 );
 
-router.post('/auth/demo', async (req, res) => {
+
+router.post('/demo', async (req, res) => {
   try {
     const user = await User.findOne({ email: 'demo@algosensei.com' });
-    if (!user) return res.status(404).json({ error: 'Demo user not found' });
+    if (!user) return res.status(404).json({ error: 'Demo user not found. Run: npm run seed:demo' });
 
     const token = jwt.sign(
       { id: user._id, isDemo: true },
       process.env.JWT_SECRET,
-      { expiresIn: '2h' }  // short-lived for demo
+      { expiresIn: '2h' }
     );
 
-    res.json({ token, user: { name: user.name, avatar: user.avatar, isDemo: true } });
+    res.json({
+      token,
+      user: {
+        _id:    user._id,
+        name:   user.name,
+        avatar: user.avatar,
+        email:  user.email,
+        isDemo: true,
+      },
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('name email image').lean();
