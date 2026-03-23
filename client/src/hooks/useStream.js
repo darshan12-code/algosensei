@@ -3,19 +3,8 @@ import { useRef, useState, useCallback } from 'react';
 
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-/**
- * useStream()
- *
- * startStream(path, body, onChunk, options?)
- *   path    – string  e.g. '/api/chat/stream'
- *   body    – object  sent as JSON
- *   onChunk – (fullAccumulatedContent: string) => void  — called on every token
- *   options – { onDone?, onError? }  (optional)
- *
- * Returns { streaming, typing, startStream, cancelStream }
- */
 export const useStream = () => {
-  const readerRef             = useRef(null);
+  const readerRef                 = useRef(null);
   const [streaming, setStreaming] = useState(false);
   const [typing,    setTyping]    = useState(false);
 
@@ -33,7 +22,7 @@ export const useStream = () => {
         method:  'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          Authorization:  `Bearer ${token}`,
         },
         body: JSON.stringify(body),
       });
@@ -46,31 +35,33 @@ export const useStream = () => {
       const reader  = res.body.getReader();
       readerRef.current = reader;
       const decoder = new TextDecoder();
+      let   leftover = '';
 
-      setTyping(false); // first byte arrived — switch from typing dots to live text
+      setTyping(false); // first byte arrived — switch from dots to live text
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        const text  = leftover + decoder.decode(value, { stream: true });
+        const lines = text.split('\n');
+        leftover    = lines.pop(); // save incomplete trailing line
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const dataStr = line.slice(6).trim();
           if (dataStr === '[DONE]') continue;
           if (dataStr.startsWith('[ERROR]')) {
-            throw new Error(dataStr.slice(7));
+            throw new Error(dataStr.slice(7).trim());
           }
           try {
             const parsed = JSON.parse(dataStr);
-            const piece  = parsed.choices?.[0]?.delta?.content;
+            const piece  = parsed.token; // ✅ matches backend: res.write(`data: ${JSON.stringify({ token })}\n\n`)
             if (piece) {
               fullContent += piece;
               onChunk?.(fullContent);
             }
-          } catch { /* incomplete JSON chunk — skip */ }
+          } catch { /* malformed line — skip */ }
         }
       }
 
