@@ -1,11 +1,12 @@
 import express from 'express';
 import Session from '../models/Session.js';
-import verifyToken from '../middleware/auth.js';
+import verifyToken, { blockDemo } from '../middleware/auth.js';
 import { requireFields } from '../lib/validate.js';
 
 const router = express.Router();
 
-router.post('/', verifyToken, async (req, res) => {
+// Demo users can't save sessions — they read pre-seeded ones only
+router.post('/', verifyToken, blockDemo, async (req, res) => {
   try {
     const { problemId, messages, mode, solved } = req.body;
     const valErr = requireFields(['messages', 'mode'], req.body);

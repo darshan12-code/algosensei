@@ -24,7 +24,23 @@ router.get('/google/callback',
   }
 );
 
-// Fix: fetch full user from DB so name + image are returned
+router.post('/auth/demo', async (req, res) => {
+  try {
+    const user = await User.findOne({ email: 'demo@algosensei.com' });
+    if (!user) return res.status(404).json({ error: 'Demo user not found' });
+
+    const token = jwt.sign(
+      { id: user._id, isDemo: true },
+      process.env.JWT_SECRET,
+      { expiresIn: '2h' }  // short-lived for demo
+    );
+
+    res.json({ token, user: { name: user.name, avatar: user.avatar, isDemo: true } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('name email image').lean();

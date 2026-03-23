@@ -1,8 +1,12 @@
 // server/middleware/auth.js
-
-
 import jwt from 'jsonwebtoken';
-
+// After verifying token, block writes for demo user on sensitive routes
+export const blockDemo = (req, res, next) => {
+  if (req.user?.isDemo) {
+    return res.status(403).json({ error: 'Not available in demo mode' });
+  }
+  next();
+};
 const verifyToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
 

@@ -1,5 +1,5 @@
 // src/pages/Login.jsx
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../context/AuthContext.jsx';
 import styled from 'styled-components';
@@ -50,6 +50,48 @@ const Subtitle = styled.p`
   line-height: 1.6;
 `;
 
+const ButtonGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+`;
+
+const DemoBtn = styled.button`
+  width: 100%;
+  padding: 11px 20px;
+  border-radius: ${({ theme }) => theme.radius.md};
+  border: 1px dashed ${({ theme }) => theme.colors.border};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  &:hover:not(:disabled) {
+    border-color: ${({ theme }) => theme.colors.accentBorder};
+    color: ${({ theme }) => theme.colors.accent};
+    background: ${({ theme }) => theme.colors.accentBg};
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const DemoNote = styled.div`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.textMuted};
+  margin-top: 2px;
+`;
+
 const Divider = styled.div`
   display: flex;
   align-items: center;
@@ -81,7 +123,6 @@ const FeatureRow = styled.div`
   color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
-/* FIX: auth loading state — shows spinner instead of blank white screen */
 const LoadingPage = styled.div`
   min-height: 80vh;
   display: flex;
@@ -104,15 +145,39 @@ const FEATURES = [
   ['📊', 'Streak tracking & weak topic heatmap'],
 ];
 
+const BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 export default function Login() {
-  const { user, loading } = useAuthContext();
-  const navigate = useNavigate();
+  const { user, loading, setUser } = useAuthContext();
+  const navigate    = useNavigate();
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [demoError,   setDemoError]   = useState('');
 
   useEffect(() => {
     if (!loading && user) navigate('/', { replace: true });
   }, [user, loading, navigate]);
 
-  /* FIX: show a spinner instead of blank screen while checking auth */
+  const handleDemoLogin = async () => {
+    setDemoLoading(true);
+    setDemoError('');
+    try {
+      const res  = await fetch(`${BASE}/auth/demo`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Demo login failed');
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user',  JSON.stringify(data.user));
+
+      // Update auth context so the rest of the app recognises the demo user
+      setUser(data.user);
+      navigate('/', { replace: true });
+    } catch (err) {
+      setDemoError(err.message);
+    } finally {
+      setDemoLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <LoadingPage>
@@ -137,10 +202,20 @@ export default function Login() {
         <Logo>🥋</Logo>
         <Title>AlgoSensei</Title>
         <Subtitle>Your AI-powered DSA and technical interview prep mentor.</Subtitle>
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
+
+        <ButtonGroup>
           <GoogleLoginButton />
-        </div>
+          <DemoBtn onClick={handleDemoLogin} disabled={demoLoading || loading}>
+            {demoLoading ? '⏳ Signing in…' : '🎭 Try Demo — No login required'}
+          </DemoBtn>
+          {demoError && (
+            <DemoNote style={{ color: 'var(--red)' }}>⚠ {demoError}</DemoNote>
+          )}
+          <DemoNote>Read-only · expires in 2 hours · no account needed</DemoNote>
+        </ButtonGroup>
+
         <Divider>what you get</Divider>
+
         <Features>
           {FEATURES.map(([icon, text]) => (
             <FeatureRow key={text}>
