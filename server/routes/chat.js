@@ -1,6 +1,3 @@
-// server/routes/chat.js
-// Fix #8: uses shared groqJSON() helper for the stream call.
-
 import express from 'express';
 import verifyToken from '../middleware/auth.js';
 import rateLimit from '../lib/rateLimiter.js';
@@ -9,7 +6,7 @@ import DSAProblem from '../models/DSAProblem.js';
 import TechQuestion from '../models/TechQuestion.js';
 import handleAxiosError from '../lib/handleAxiosError.js';
 import { requireFields } from '../lib/validate.js';
-import { groqJSON } from '../lib/groq.js';
+import { groqJSON, groqStream } from '../lib/groq.js';
 
 const router = express.Router();
 
@@ -19,7 +16,7 @@ router.post('/stream', verifyToken, rateLimit, async (req, res) => {
   const valErr = requireFields(['messages', 'mode'], req.body);
   if (valErr) return res.status(400).json({ error: valErr });
 
-  // ── Build system prompt ────────────────────────────────────────────────
+  // ── Build system prompt ──────────────────────────────────────────────
   let systemPrompt = '';
   try {
     if (mode === 'dsa_hint' || mode === 'dsa_reveal') {
@@ -41,7 +38,6 @@ router.post('/stream', verifyToken, rateLimit, async (req, res) => {
       systemPrompt = PROMPTS.mock_interview(typeMap[mode]);
 
     } else if (mode === 'general') {
-      // Fix #13: AIChatBot widget uses this mode for freeform questions
       systemPrompt = PROMPTS.general();
 
     } else {
@@ -51,22 +47,30 @@ router.post('/stream', verifyToken, rateLimit, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 
-  // ── Stream response ────────────────────────────────────────────────────
-  res.setHeader('Content-Type',  'text/event-stream');
+  // ── Stream response ──────────────────────────────────────────────────
+  res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection',    'keep-alive');
+  res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
   try {
-    const groqRes = await groqJSON(
+    const stream = await groqStream(
       [{ role: 'system', content: systemPrompt }, ...messages],
-      { stream: true, max_tokens: 2000 },
+      { max_tokens: 2000 }
     );
 
-    groqRes.data.pipe(res);
-    req.on('close', () => groqRes.data.destroy());
+    for await (const chunk of stream) {
+      const token = chunk.choices[0]?.delta?.content || '';
+      if (token) {
+        res.write(`data: ${JSON.stringify({ token })}\n\n`);
+      }
+    }
+
+    res.write('data: [DONE]\n\n');
+    res.end();
+
   } catch (err) {
-    console.error('Stream error:', err.response?.data || err.message);
+    console.error('Stream error:', err.message);
     if (err.response) return handleAxiosError(err, res);
     res.write(`data: [ERROR] ${err.message}\n\n`);
     res.end();
@@ -76,6 +80,7 @@ router.post('/stream', verifyToken, rateLimit, async (req, res) => {
 router.get('/context', verifyToken, async (req, res) => {
   try {
     const { problemId, techQuestionId } = req.query;
+
     if (problemId) {
       const problem = await DSAProblem.findById(problemId).lean();
       return res.json({ type: 'dsa', data: problem });
@@ -85,6 +90,7 @@ router.get('/context', verifyToken, async (req, res) => {
       return res.json({ type: 'tech', data: question });
     }
     res.json({ type: 'mock', data: null });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
