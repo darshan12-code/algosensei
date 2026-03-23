@@ -1,5 +1,5 @@
 // server/routes/chat.js
-// Fix #8: uses shared groq() helper for the stream call.
+// Fix #8: uses shared groqJSON() helper for the stream call.
 
 import express from 'express';
 import verifyToken from '../middleware/auth.js';
@@ -58,7 +58,7 @@ router.post('/stream', verifyToken, rateLimit, async (req, res) => {
   res.flushHeaders();
 
   try {
-    const groqRes = await groq(
+    const groqRes = await groqJSON(
       [{ role: 'system', content: systemPrompt }, ...messages],
       { stream: true, max_tokens: 2000 },
     );
