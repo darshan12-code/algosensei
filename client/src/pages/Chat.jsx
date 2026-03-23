@@ -219,42 +219,53 @@ const Chat = () => {
   }, [messages, typing]);
 
   useEffect(() => () => cancelStream(), [cancelStream]);
+const sendMessage = async (userText) => {
+  if (!userText.trim() || streaming) return;
+  const token = localStorage.getItem('token');
+  if (!token) { alert('Please log in first'); return; }
 
-  const sendMessage = async (userText) => {
-    if (!userText.trim() || streaming) return;
-    const token = localStorage.getItem('token');
-    if (!token) { alert('Please log in first'); return; }
+  const userMsg     = { role: 'user', content: userText };
+  const newMessages = [...messages, userMsg];
 
-    const userMsg    = { role: 'user', content: userText };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
-    setInput('');
-    shouldAutoScroll.current = true;
+  // Add both user msg and empty assistant placeholder atomically
+  setMessages([...newMessages, { role: 'assistant', content: '' }]);
+  setInput('');
+  shouldAutoScroll.current = true;
 
-    const aiMsgIndex = newMessages.length;
-    setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+  // Index is always the last message
+  const aiMsgIndex = newMessages.length;
 
-    try {
-      await startStream(
-        '/api/chat/stream',
-        { messages: newMessages, mode, problemId: problemId || undefined, techQuestionId: techId || undefined },
-        (fullContent) => {
-          setMessages(prev => {
-            const updated = [...prev];
+  try {
+    await startStream(
+      '/api/chat/stream',
+      {
+        messages:        newMessages,
+        mode,
+        problemId:       problemId   || undefined,
+        techQuestionId:  techId      || undefined,
+      },
+      (fullContent) => {
+        setMessages(prev => {
+          const updated = [...prev];
+          // Guard: only update if the slot exists
+          if (updated[aiMsgIndex]) {
             updated[aiMsgIndex] = { role: 'assistant', content: fullContent };
-            return updated;
-          });
-        },
-      );
-      setAiMsgCount(c => c + 1); // Fix #10: increment after full message, not per chunk
-    } catch (err) {
-      setMessages(prev => {
-        const updated = [...prev];
-        updated[aiMsgIndex] = { role: 'assistant', content: `❌ Error: ${err.message}. Please try again.` };
-        return updated;
-      });
-    }
-  };
+          }
+          return updated;
+        });
+      },
+    );
+    setAiMsgCount(c => c + 1);
+  } catch (err) {
+    setMessages(prev => {
+      const updated = [...prev];
+      if (updated[aiMsgIndex]) {
+        updated[aiMsgIndex] = { role: 'assistant', content: `❌ Error: ${err.message}` };
+      }
+      return updated;
+    });
+  }
+};
 
   const saveSession = async (solved) => {
     const token = localStorage.getItem('token');
@@ -377,7 +388,7 @@ const Chat = () => {
                 {msg.role === 'assistant' ? (
                   <div className="markdown-body">
                     <ReactMarkdown components={markdownComponents}>
-                      {msg.content || '...'}
+                      {msg.content || (streaming && i === messages.length - 1 ? '▋' : '...')}
                     </ReactMarkdown>
                   </div>
                 ) : <span>{msg.content}</span>}
