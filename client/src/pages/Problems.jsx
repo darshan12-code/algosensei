@@ -209,7 +209,7 @@ export default function Problems() {
           <PageTitle initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
             DSA Problems
           </PageTitle>
-          <PageSubtitle>{visibleProblems.length} problems · {solvedCount} solved</PageSubtitle>
+          <PageSubtitle>{total} problems · {solvedCount} solved</PageSubtitle>
 
           <Input
             placeholder="Search problems…"
